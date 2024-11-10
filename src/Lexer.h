@@ -4,8 +4,6 @@
 #include <string>
 #include <vector>
 
-using namespace std;
-
 // defines the Lexer class, which is responsible for tokenizing the source code
 class Lexer
 {
@@ -14,13 +12,13 @@ public:
     // explicit keyword is used to prevent implicit conversions
     // e.g. Lexer l = "source code"; is not allowed
     // instead, Lexer l("source code"); is required
-    explicit Lexer(const string &source) : source(source), current(0), start(0), line(1) {}
+    explicit Lexer(const std::string &source) : source(source), current(0), start(0), line(1) {}
 
     // tokenizes the source code and returns a vector of tokens
-    vector<Token> tokenize();
+    std::vector<Token> tokenize();
 
 private:
-    string source;  // the source code to be tokenized
+    std::string source;  // the source code to be tokenized
     size_t current; // the current position in the source code
     size_t start;   // the start position of the current token
     int line;       // the current line number

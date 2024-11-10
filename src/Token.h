@@ -1,8 +1,6 @@
 #pragma once
 #include <string>
 
-using namespace std;
-
 enum class TokenType {
     // Keywords
     IF,
@@ -52,13 +50,13 @@ enum class TokenType {
 
 struct Token {
     TokenType type;
-    string lexeme;
+    std::string lexeme;
     double numValue;  // Used for INTEGER and DOUBLE tokens
     
     // constructor
     // creates a new token with the given type and lexeme
-    Token(TokenType t, const string& l) : type(t), lexeme(l), numValue(0.0) {}
+    Token(TokenType t, const std::string& l) : type(t), lexeme(l), numValue(0.0) {}
 
     // creates a new token with the given type, lexeme, and number value
-    Token(TokenType t, const string& l, double v) : type(t), lexeme(l), numValue(v) {}
+    Token(TokenType t, const std::string& l, double v) : type(t), lexeme(l), numValue(v) {}
 }; 
