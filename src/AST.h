@@ -88,16 +88,35 @@ public:
     }
 };
 
-class PrintStmt : public Statement
+class TypeDeclarationStmt : public Statement
 {
 public:
-    Token stringToPrint;
+    Token type;
+    Token name;
+    ExprPtr initializer;
 
-    explicit PrintStmt(Token stringToPrint) : stringToPrint(stringToPrint) {}
+    TypeDeclarationStmt(Token type, Token name, ExprPtr initializer)
+        : type(type), name(name), initializer(initializer) {}
 
     std::string toString() const override
     {
-        return "print(" + stringToPrint.lexeme + ");";
+        if (initializer) {
+            return type.lexeme + " " + name.lexeme + " = " + initializer->toString() + ";";
+        }
+        return type.lexeme + " " + name.lexeme + ";";
+    }
+};
+
+class PrintStmt : public Statement
+{
+public:
+    Token string;
+
+    explicit PrintStmt(Token string) : string(string) {}
+
+    std::string toString() const override
+    {
+        return "print(" + string.lexeme + ");";
     }
 };
 

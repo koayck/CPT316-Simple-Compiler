@@ -7,7 +7,10 @@ using namespace std;
 static const unordered_map<string, TokenType> keywords = {
     {"if", TokenType::IF},
     {"else", TokenType::ELSE},
-    {"while", TokenType::WHILE}};
+    {"while", TokenType::WHILE},
+    {"int", TokenType::TYPE_INT},
+    {"double", TokenType::TYPE_DOUBLE},
+    {"string", TokenType::TYPE_STRING}};
 
 // tokenizes the source code and returns a vector of tokens
 vector<Token> Lexer::tokenize()
@@ -24,30 +27,39 @@ vector<Token> Lexer::tokenize()
         }
     }
 
-    tokens.push_back(Token(TokenType::EOF_TOKEN, ""));
+    tokens.push_back(Token(TokenType::EOF_TOKEN, "", line));
     return tokens;
 }
 
 Token Lexer::number()
 {
+    bool isDouble = false;
+
     while (isDigit(peek()))
-        advance(); // Consume digits
+        advance();
 
-    // Check for a fractional part
-    if (peek() == '.')
+    // Look for a fractional part
+    if (peek() == '.' && isDigit(peekNext()))
     {
-        advance(); // Consume the '.'
-        while (isDigit(peek()))
-            advance(); // Consume digits after the '.'
+        isDouble = true;
+        advance(); // Consume the "."
 
-        // Convert the substring to a double
-        double value = stod(source.substr(start, current - start));
-        return makeToken(TokenType::DOUBLE, value); // Return as DOUBLE token
+        while (isDigit(peek()))
+            advance();
     }
 
-    // Convert the substring to an integer
-    int intValue = stoi(source.substr(start, current - start));
-    return makeToken(TokenType::INTEGER, intValue); // Return as INTEGER token
+    std::string numStr = source.substr(start, current - start);
+
+    if (isDouble)
+    {
+        double value = std::stod(numStr);
+        return Token(TokenType::DOUBLE, numStr, value, line);
+    }
+    else
+    {
+        int value = std::stoi(numStr);
+        return Token(TokenType::INTEGER, numStr, value, line);
+    }
 }
 
 Token Lexer::identifier()
@@ -57,10 +69,11 @@ Token Lexer::identifier()
 
     std::string text = source.substr(start, current - start);
 
-    // if the identifier is a keyword, return the corresponding token
-    if (keywords.find(text) != keywords.end())
+    // Check if it's a data type or other keyword
+    auto it = keywords.find(text);
+    if (it != keywords.end())
     {
-        return makeToken(static_cast<TokenType>(keywords.at(text)));
+        return makeToken(it->second);
     }
 
     // If it's not a keyword, return an IDENTIFIER token
@@ -83,13 +96,7 @@ Token Lexer::scanToken()
     if (isAtEnd())
         return makeToken(TokenType::EOF_TOKEN);
 
-    // retrieve character at current index before advancing the position
     char c = advance();
-
-    if (isDigit(c))
-        return number();
-    if (isAlpha(c))
-        return identifier();
 
     switch (c)
     {
@@ -140,9 +147,20 @@ Token Lexer::scanToken()
     case '"':
         return string();
     case 'p':
-        return makeToken(TokenType::PRINT);
+        if (peek() == '(')
+            return makeToken(TokenType::PRINT);
+        break;
     case 'r':
         return makeToken(TokenType::READ);
+    }
+
+    if (isDigit(c))
+    {
+        return number();
+    }
+    if (isAlpha(c))
+    {
+        return identifier();
     }
 
     return makeToken(TokenType::INVALID);
@@ -177,21 +195,20 @@ void Lexer::skipWhitespace()
 Token Lexer::makeToken(TokenType type) const
 {
     std::string text = source.substr(start, current - start);
-    return Token(type, text);
+    return Token(type, text, line);
 }
 
 Token Lexer::makeToken(TokenType type, double value) const
 {
     std::string text = source.substr(start, current - start);
-    return Token(type, text, value);
+    return Token(type, text, value, line);
 }
 
 Token Lexer::string()
 {
     // Skip the opening quote
-    advance();
+    start = current; // Start after the opening quote
 
-    start = current;
     while (peek() != '"' && !isAtEnd())
     {
         if (peek() == '\n')
@@ -204,13 +221,10 @@ Token Lexer::string()
         return makeToken(TokenType::INVALID); // Unterminated string
     }
 
-    // Get the string content
     std::string value = source.substr(start, current - start);
+    advance(); // Skip the closing quote
 
-    // Skip the closing quote
-    advance();
-
-    return Token(TokenType::STRING, value);
+    return Token(TokenType::STRING, value, line);
 }
 
 #include "Token.h"
@@ -281,6 +295,12 @@ string tokenTypeToString(TokenType type)
         return "EOF_TOKEN";
     case TokenType::INVALID:
         return "INVALID";
+    case TokenType::TYPE_INT:
+        return "TYPE_INT";
+    case TokenType::TYPE_DOUBLE:
+        return "TYPE_DOUBLE";
+    case TokenType::TYPE_STRING:
+        return "TYPE_STRING";
     default:
         return "UNKNOWN"; // Fallback for any unrecognized type
     }

@@ -25,14 +25,15 @@ private:
     bool check(TokenType type) const;
     bool match(TokenType type);
 
-
     StmtPtr statement();
+    StmtPtr typeDeclarationStatement();
     StmtPtr assignmentStatement();
     StmtPtr printStatement();
     StmtPtr inputStatement();
     StmtPtr ifStatement();
     StmtPtr whileStatement();
 
+    ExprPtr comparison();
     ExprPtr expression();
     ExprPtr term();
     ExprPtr factor();
