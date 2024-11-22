@@ -3,7 +3,7 @@
 #include "Lexer.cpp"
 #include "Parser.cpp"
 #include <fstream>
-#include <iomanip> // for setw
+#include <iomanip>
 
 using namespace std;
 
@@ -16,7 +16,6 @@ void printIndented(const string &text, int indent)
 // Function to print AST in a tree-like structure
 void printAST(const StmtPtr &stmt, int indent = 0)
 {
-  // This is important in scenarios where you are working with a base class pointer (in this case, StmtPtr, which is likely a base class for various statement types) and you want to check if it actually points to a derived class (like AssignmentStmt).
   if (auto assignStmt = dynamic_pointer_cast<AssignmentStmt>(stmt))
   {
     printIndented("AssignmentStmt", indent);
@@ -26,30 +25,23 @@ void printAST(const StmtPtr &stmt, int indent = 0)
   else if (auto printStmt = dynamic_pointer_cast<PrintStmt>(stmt))
   {
     printIndented("PrintStmt", indent);
-    printIndented("|-- Argument: " + printStmt->string.lexeme, indent + 4);
+    printIndented("|-- Expression: " + printStmt->expression->toString(), indent + 4);
   }
   else if (auto inputStmt = dynamic_pointer_cast<InputStmt>(stmt))
   {
     printIndented("InputStmt", indent);
     printIndented("|-- Variable: " + inputStmt->name.lexeme, indent + 4);
-    printIndented("|-- Prompt: " + inputStmt->prompt.lexeme, indent + 4);
   }
   else if (auto ifStmt = dynamic_pointer_cast<IfStmt>(stmt))
   {
     printIndented("IfStmt", indent);
     printIndented("|-- Condition: " + ifStmt->condition->toString(), indent + 4);
     printIndented("|-- Then Branch:", indent + 4);
-    for (const auto &thenStmt : ifStmt->thenBranch)
-    {
-      printAST(thenStmt, indent + 8);
-    }
-    if (!ifStmt->elseBranch.empty())
+    printAST(ifStmt->thenBranch, indent + 8);
+    if (ifStmt->elseBranch)
     {
       printIndented("|-- Else Branch:", indent + 4);
-      for (const auto &elseStmt : ifStmt->elseBranch)
-      {
-        printAST(elseStmt, indent + 8);
-      }
+      printAST(ifStmt->elseBranch, indent + 8);
     }
   }
   else if (auto whileStmt = dynamic_pointer_cast<WhileStmt>(stmt))
@@ -57,10 +49,7 @@ void printAST(const StmtPtr &stmt, int indent = 0)
     printIndented("WhileStmt", indent);
     printIndented("|-- Condition: " + whileStmt->condition->toString(), indent + 4);
     printIndented("|-- Body:", indent + 4);
-    for (const auto &bodyStmt : whileStmt->body)
-    {
-      printAST(bodyStmt, indent + 8);
-    }
+    printAST(whileStmt->body, indent + 8);
   }
   else if (auto declStmt = dynamic_pointer_cast<TypeDeclarationStmt>(stmt))
   {
@@ -102,7 +91,7 @@ int main()
 
   try
   {
-    // Lexical Analysis
+    // Lexical Analysis (Tokenization)
     Lexer lexer(input);
     vector<Token> tokens = lexer.tokenize();
 
@@ -115,8 +104,7 @@ int main()
     cout << "\n=== Parse Tree ===" << endl;
 
     // Syntactic Analysis (Parsing)
-    Parser parser(tokens);
-    vector<StmtPtr> statements = parser.parse();
+    vector<StmtPtr> statements = parse(tokens);
 
     cout << "\n=== Abstract Syntax Tree ===" << endl;
     for (const auto &statement : statements)

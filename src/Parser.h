@@ -5,40 +5,41 @@
 #include <stdexcept>
 #include <string>
 
-class Parser
+// Parser state structure
+struct ParserState
 {
-public:
-    explicit Parser(const vector<Token> &tokens)
-        : tokens(tokens), current(0) {}
-
-    vector<StmtPtr> parse();
-
-private:
-    vector<Token> tokens;
+    const std::vector<Token> &tokens;
     size_t current;
 
-    bool isAtEnd() const;
-    Token peek() const;
-    Token peekNext(int lookahead = 1) const;
-    Token previous() const;
-    Token advance();
-    bool check(TokenType type) const;
-    bool match(TokenType type);
-
-    StmtPtr statement();
-    StmtPtr typeDeclarationStatement();
-    StmtPtr assignmentStatement();
-    StmtPtr printStatement();
-    StmtPtr inputStatement();
-    StmtPtr ifStatement();
-    StmtPtr whileStatement();
-
-    ExprPtr comparison();
-    ExprPtr expression();
-    ExprPtr term();
-    ExprPtr factor();
-    ExprPtr power();
-    ExprPtr primary();
-
-    void consume(TokenType type, const std::string &message);
+    ParserState(const std::vector<Token> &tokens) : tokens(tokens), current(0) {}
 };
+
+// Main parsing function
+std::vector<StmtPtr> parse(const std::vector<Token> &tokens);
+
+// Helper functions
+bool isAtEnd(const ParserState &state);
+Token peek(const ParserState &state);
+Token peekNext(const ParserState &state, int lookahead = 1);
+Token previous(const ParserState &state);
+Token advance(ParserState &state);
+bool check(const ParserState &state, TokenType type);
+bool match(ParserState &state, TokenType type);
+void consume(ParserState &state, TokenType type, const std::string &message);
+
+// Statement parsing functions
+StmtPtr parseStatement(ParserState &state);
+StmtPtr parseTypeDeclaration(ParserState &state);
+StmtPtr parseAssignment(ParserState &state);
+StmtPtr parsePrint(ParserState &state);
+StmtPtr parseInput(ParserState &state);
+StmtPtr parseIf(ParserState &state);
+StmtPtr parseWhile(ParserState &state);
+
+// Expression parsing functions
+ExprPtr parseComparison(ParserState &state);
+ExprPtr parseExpression(ParserState &state);
+ExprPtr parseTerm(ParserState &state);
+ExprPtr parseFactor(ParserState &state);
+ExprPtr parsePower(ParserState &state);
+ExprPtr parsePrimary(ParserState &state);

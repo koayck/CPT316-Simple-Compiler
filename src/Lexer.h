@@ -18,10 +18,10 @@ public:
     std::vector<Token> tokenize();
 
 private:
-    std::string source;  // the source code to be tokenized
-    size_t current; // the current position in the source code
-    size_t start;   // the start position of the current token
-    int line;       // the current line number
+    std::string source; // the source code to be tokenized
+    size_t current;     // the current position in the source code
+    size_t start;       // the start position of the current token
+    int line;           // the current line number
 
     // returns true if the current position is at the end of the source code
     bool isAtEnd() const { return current >= source.length(); }
@@ -46,7 +46,7 @@ private:
 
     // creates a new token with the given type and value
     Token makeToken(TokenType type, double value) const;
-    
+
     Token string();
     Token number();
     Token identifier();

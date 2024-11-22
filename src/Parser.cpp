@@ -1,97 +1,95 @@
 #include "Parser.h"
 #include <iostream>
+#include <memory>
 
 using namespace std;
 
-vector<StmtPtr> Parser::parse()
+vector<StmtPtr> parse(const vector<Token> &tokens)
 {
+  ParserState state(tokens);
   vector<StmtPtr> statements;
-  while (!isAtEnd())
+
+  while (!isAtEnd(state))
   {
-    statements.push_back(statement());
+    statements.push_back(parseStatement(state));
   }
   return statements;
 }
 
-// check if the current token is the end of the file
-bool Parser::isAtEnd() const
+bool isAtEnd(const ParserState &state)
 {
-  return peek().type == TokenType::EOF_TOKEN;
+  return peek(state).type == TokenType::EOF_TOKEN;
 }
 
-// get the current token
-Token Parser::peek() const
+Token peek(const ParserState &state)
 {
-  return tokens[current];
+  return state.tokens[state.current];
 }
 
-// get the next token
-Token Parser::peekNext(int lookahead) const
+Token peekNext(const ParserState &state, int lookahead)
 {
-  return tokens[current + lookahead];
+  return state.tokens[state.current + lookahead];
 }
 
-// get the previous token
-Token Parser::previous() const
+Token previous(const ParserState &state)
 {
-  return tokens[current - 1];
+  return state.tokens[state.current - 1];
 }
 
-// return the current token, then advance to the next token
-Token Parser::advance()
+Token advance(ParserState &state)
 {
-  if (!isAtEnd())
-    current++;
-  return previous();
-}
-
-// check if the current token is of a certain type
-bool Parser::check(TokenType type) const
-{
-  return !isAtEnd() && peek().type == type;
-}
-
-// check if the current token matches a certain type, then advance to the next token if it does
-bool Parser::match(TokenType type)
-{
-  cout << "Attempting to match: " << tokenTypeToString(type)
-       << " with current token: " << peek() << endl;
-  if (check(type))
+  if (!isAtEnd(state))
   {
-    advance();
+    state.current++;
+  }
+  return previous(state);
+}
+
+bool check(const ParserState &state, TokenType type)
+{
+  return !isAtEnd(state) && peek(state).type == type;
+}
+
+bool match(ParserState &state, TokenType type)
+{
+  if (check(state, type))
+  {
+    advance(state);
     return true;
   }
   return false;
 }
 
-// parse a statement
-StmtPtr Parser::statement()
+StmtPtr parseStatement(ParserState &state)
 {
   try
   {
-    if (match(TokenType::IF))
+    if (match(state, TokenType::IF))
     {
-      return ifStatement();
+      return parseIf(state);
     }
-    if (match(TokenType::WHILE))
+    if (match(state, TokenType::WHILE))
     {
-      return whileStatement();
+      return parseWhile(state);
     }
-    if (match(TokenType::PRINT))
+    if (match(state, TokenType::PRINT))
     {
-      return printStatement();
+      return parsePrint(state);
     }
-    if (match(TokenType::TYPE_INT) || match(TokenType::TYPE_DOUBLE) || match(TokenType::TYPE_STRING))
+    if (match(state, TokenType::TYPE_INT) ||
+        match(state, TokenType::TYPE_DOUBLE) ||
+        match(state, TokenType::TYPE_STRING))
     {
-      return typeDeclarationStatement();
+      return parseTypeDeclaration(state);
     }
-    if (peek().type == TokenType::IDENTIFIER && peekNext().type == TokenType::ASSIGN)
+    if (peek(state).type == TokenType::IDENTIFIER &&
+        peekNext(state).type == TokenType::ASSIGN)
     {
-      if (peekNext(2).type == TokenType::READ)
+      if (peekNext(state, 2).type == TokenType::READ)
       {
-        return inputStatement();
+        return parseInput(state);
       }
-      return assignmentStatement();
+      return parseAssignment(state);
     }
 
     throw runtime_error("Expected statement");
@@ -100,236 +98,170 @@ StmtPtr Parser::statement()
   {
     if (string(e.what()).find("Line") == string::npos)
     {
-      throw runtime_error("Line " + to_string(peek().line) + ": " + e.what());
+      throw runtime_error("Line " + to_string(peek(state).line) + ": " + e.what());
     }
     throw;
   }
 }
 
-// parse a type declaration statement
-StmtPtr Parser::typeDeclarationStatement()
+StmtPtr parseTypeDeclaration(ParserState &state)
 {
-  Token type = previous(); // Get the type token (int, double, string)
-  Token name = advance();  // Get the variable name
+  Token type = previous(state);
+  Token name = advance(state);
 
   if (name.type != TokenType::IDENTIFIER)
   {
-    throw runtime_error("Line " + to_string(peek().line) + ": Expected variable name after type");
+    throw runtime_error("Line " + to_string(peek(state).line) +
+                        ": Expected variable name after type");
   }
 
   ExprPtr initializer = nullptr;
-  if (match(TokenType::ASSIGN))
+  if (match(state, TokenType::ASSIGN))
   {
-    // Handle initialization
-    initializer = expression();
+    initializer = parseExpression(state);
   }
 
-  consume(TokenType::SEMICOLON, "Expected ';' after declaration");
-
+  consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
   return make_shared<TypeDeclarationStmt>(type, name, initializer);
 }
 
-// parse an assignment statement
-StmtPtr Parser::assignmentStatement()
+ExprPtr parseComparison(ParserState &state)
 {
-  Token name = advance(); // Get identifier
-  consume(TokenType::ASSIGN, "Expected '=' after variable name");
-  ExprPtr value = expression();
-  consume(TokenType::SEMICOLON, "Expected ';' after assignment");
-  return make_shared<AssignmentStmt>(name, value);
-}
+  ExprPtr expr = parseExpression(state);
 
-// parse a print statement
-StmtPtr Parser::printStatement()
-{
-  consume(TokenType::LPAREN, "Expected '(' after 'p'");
-
-  // Create a PrintStmt that can handle either a string literal or a variable
-  Token printArg = advance(); // Get the argument token
-
-  if (printArg.type != TokenType::STRING && printArg.type != TokenType::IDENTIFIER)
+  while (match(state, TokenType::GREATER) ||
+         match(state, TokenType::GREATER_EQUAL) ||
+         match(state, TokenType::LESS) ||
+         match(state, TokenType::LESS_EQUAL) ||
+         match(state, TokenType::EQUAL_EQUAL) ||
+         match(state, TokenType::NOT_EQUAL))
   {
-    throw runtime_error("Expected string literal or variable in print statement");
+    Token op = previous(state);
+    ExprPtr right = parseExpression(state);
+    expr = make_shared<BinaryExpr>(expr, op, right);
   }
 
-  consume(TokenType::RPAREN, "Expected ')' after print argument");
-  consume(TokenType::SEMICOLON, "Expected ';' after print statement");
-
-  return make_shared<PrintStmt>(printArg);
+  return expr;
 }
 
-// parse an input statement
-StmtPtr Parser::inputStatement()
+void consume(ParserState &state, TokenType type, const string &message)
 {
-  Token name = advance(); // Get identifier
-  consume(TokenType::ASSIGN, "Expected '=' after variable name");
-  consume(TokenType::READ, "Expected 'r' for input");
-  consume(TokenType::LPAREN, "Expected '(' after 'r'");
-  Token prompt = advance(); // Get prompt string
-  if (prompt.type != TokenType::STRING)
+  if (check(state, type))
   {
-    throw runtime_error("Expected string literal in input statement");
+    advance(state);
+    return;
   }
-  consume(TokenType::RPAREN, "Expected ')' after prompt");
-  consume(TokenType::SEMICOLON, "Expected ';' after input statement");
-  return make_shared<InputStmt>(name, prompt);
+  throw runtime_error("Line " + to_string(peek(state).line) + ": " + message);
 }
 
-// parse an if statement
-StmtPtr Parser::ifStatement()
+StmtPtr parseIf(ParserState &state)
 {
-  ExprPtr condition = comparison();
-  consume(TokenType::LBRACE, "Expected '{' after if condition");
+  consume(state, TokenType::LPAREN, "Expected '(' after 'if'");
+  ExprPtr condition = parseComparison(state);
+  consume(state, TokenType::RPAREN, "Expected ')' after if condition");
 
-  vector<StmtPtr> thenBranch;
-  while (!check(TokenType::RBRACE) && !isAtEnd())
-  {
-    thenBranch.push_back(statement());
-  }
-  consume(TokenType::RBRACE, "Expected '}' after then branch");
+  StmtPtr thenBranch = parseStatement(state);
+  StmtPtr elseBranch = nullptr;
 
-  vector<StmtPtr> elseBranch;
-  if (match(TokenType::ELSE))
+  if (match(state, TokenType::ELSE))
   {
-    consume(TokenType::LBRACE, "Expected '{' after else");
-    while (!check(TokenType::RBRACE) && !isAtEnd())
-    {
-      elseBranch.push_back(statement());
-    }
-    consume(TokenType::RBRACE, "Expected '}' after else branch");
+    elseBranch = parseStatement(state);
   }
 
   return make_shared<IfStmt>(condition, thenBranch, elseBranch);
 }
 
-// parse a while statement
-StmtPtr Parser::whileStatement()
+StmtPtr parseWhile(ParserState &state)
 {
-  ExprPtr condition = comparison();
-  consume(TokenType::LBRACE, "Expected '{' after while condition");
+  consume(state, TokenType::LPAREN, "Expected '(' after 'while'");
+  ExprPtr condition = parseComparison(state);
+  consume(state, TokenType::RPAREN, "Expected ')' after while condition");
 
-  vector<StmtPtr> body;
-  while (!check(TokenType::RBRACE) && !isAtEnd())
-  {
-    body.push_back(statement());
-  }
-  consume(TokenType::RBRACE, "Expected '}' after while body");
-
+  StmtPtr body = parseStatement(state);
   return make_shared<WhileStmt>(condition, body);
 }
 
-// Parsing Expressions
-// parse mathematical expressions, handling operator precedence from low to high: addition/subtraction, multiplication/division, and exponentiation.
-
-// Add this new function to handle comparison expressions
-ExprPtr Parser::comparison()
+StmtPtr parsePrint(ParserState &state)
 {
-  ExprPtr expr = expression();
+  ExprPtr value = parseExpression(state);
+  consume(state, TokenType::SEMICOLON, "Expected ';' after value");
+  return make_shared<PrintStmt>(value);
+}
 
-  while (match(TokenType::GREATER) || match(TokenType::GREATER_EQUAL) ||
-         match(TokenType::LESS) || match(TokenType::LESS_EQUAL) ||
-         match(TokenType::EQUAL_EQUAL) || match(TokenType::NOT_EQUAL))
+StmtPtr parseInput(ParserState &state)
+{
+  Token name = advance(state);
+  consume(state, TokenType::ASSIGN, "Expected '=' after variable name");
+  consume(state, TokenType::READ, "Expected 'read' after '='");
+  consume(state, TokenType::SEMICOLON, "Expected ';' after 'read'");
+  return make_shared<InputStmt>(name);
+}
+
+StmtPtr parseAssignment(ParserState &state)
+{
+  Token name = advance(state);
+  consume(state, TokenType::ASSIGN, "Expected '=' after variable name");
+  ExprPtr value = parseExpression(state);
+  consume(state, TokenType::SEMICOLON, "Expected ';' after value");
+  return make_shared<AssignmentStmt>(name, value);
+}
+
+ExprPtr parseExpression(ParserState &state)
+{
+  return parseTerm(state);
+}
+
+ExprPtr parseTerm(ParserState &state)
+{
+  ExprPtr expr = parseFactor(state);
+
+  while (match(state, TokenType::PLUS) || match(state, TokenType::MINUS))
   {
-    Token op = previous();
-    ExprPtr right = expression();
+    Token op = previous(state);
+    ExprPtr right = parseFactor(state);
     expr = make_shared<BinaryExpr>(expr, op, right);
   }
 
   return expr;
 }
 
-// Parses addition and subtraction
-ExprPtr Parser::expression()
+ExprPtr parseFactor(ParserState &state)
 {
-  ExprPtr expr = term();
+  ExprPtr expr = parsePrimary(state);
 
-  while (match(TokenType::PLUS) || match(TokenType::MINUS))
+  while (match(state, TokenType::MULTIPLY) || match(state, TokenType::DIVIDE))
   {
-    Token op = previous();
-    ExprPtr right = term();
+    Token op = previous(state);
+    ExprPtr right = parsePrimary(state);
     expr = make_shared<BinaryExpr>(expr, op, right);
   }
 
   return expr;
 }
 
-// Parses multiplication and division
-ExprPtr Parser::term()
+ExprPtr parsePrimary(ParserState &state)
 {
-  ExprPtr expr = factor();
-
-  while (match(TokenType::MULTIPLY) || match(TokenType::DIVIDE))
+  if (match(state, TokenType::INTEGER) || match(state, TokenType::DOUBLE))
   {
-    Token op = previous();
-    ExprPtr right = factor();
-    expr = make_shared<BinaryExpr>(expr, op, right);
+    return make_shared<LiteralExpr>(previous(state));
   }
 
-  return expr;
-}
-
-// Parses exponentiation
-ExprPtr Parser::factor()
-{
-  ExprPtr expr = power();
-
-  while (match(TokenType::POWER))
+  if (match(state, TokenType::STRING))
   {
-    Token op = previous();
-    ExprPtr right = power();
-    expr = make_shared<BinaryExpr>(expr, op, right);
+    return make_shared<LiteralExpr>(previous(state));
   }
 
-  return expr;
-}
-
-// Prepares the parser for the highest-precedence expressions (literal values, variables)
-ExprPtr Parser::power()
-{
-  return primary();
-}
-
-// Handles literal values, variables, and grouped expressions
-ExprPtr Parser::primary()
-{
-  try
+  if (match(state, TokenType::IDENTIFIER))
   {
-    if (match(TokenType::INTEGER) || match(TokenType::DOUBLE))
-    {
-      return make_shared<LiteralExpr>(previous());
-    }
-
-    if (match(TokenType::IDENTIFIER))
-    {
-      return make_shared<VariableExpr>(previous());
-    }
-
-    if (match(TokenType::LPAREN))
-    {
-      ExprPtr expr = comparison();
-      consume(TokenType::RPAREN, "Expected ')' after expression");
-      return expr;
-    }
-
-    throw runtime_error("Expected expression");
+    return make_shared<VariableExpr>(previous(state));
   }
-  catch (const runtime_error &e)
+
+  if (match(state, TokenType::LPAREN))
   {
-    if (string(e.what()).find("Line") == string::npos)
-    {
-      throw runtime_error("Line " + to_string(peek().line) + ": " + e.what());
-    }
-    throw;
+    ExprPtr expr = parseExpression(state);
+    consume(state, TokenType::RPAREN, "Expected ')' after expression");
+    return expr;
   }
-}
 
-// consume (return) current token of correct type, then advance to next token
-void Parser::consume(TokenType type, const string &message)
-{
-  if (check(type))
-  {
-    advance();
-    return;
-  }
-  throw runtime_error("Line " + to_string(peek().line) + ": " + message);
+  throw runtime_error("Expected expression");
 }

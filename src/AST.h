@@ -100,7 +100,8 @@ public:
 
     std::string toString() const override
     {
-        if (initializer) {
+        if (initializer)
+        {
             return type.lexeme + " " + name.lexeme + " = " + initializer->toString() + ";";
         }
         return type.lexeme + " " + name.lexeme + ";";
@@ -110,13 +111,13 @@ public:
 class PrintStmt : public Statement
 {
 public:
-    Token string;
+    ExprPtr expression;
 
-    explicit PrintStmt(Token string) : string(string) {}
+    explicit PrintStmt(ExprPtr expression) : expression(expression) {}
 
     std::string toString() const override
     {
-        return "print(" + string.lexeme + ");";
+        return "print " + expression->toString() + ";";
     }
 };
 
@@ -124,14 +125,12 @@ class InputStmt : public Statement
 {
 public:
     Token name;
-    Token prompt;
 
-    InputStmt(Token name, Token prompt)
-        : name(name), prompt(prompt) {}
+    explicit InputStmt(Token name) : name(name) {}
 
     std::string toString() const override
     {
-        return name.lexeme + " = read(" + prompt.lexeme + ");";
+        return name.lexeme + " = read;";
     }
 };
 
@@ -139,28 +138,19 @@ class IfStmt : public Statement
 {
 public:
     ExprPtr condition;
-    vector<StmtPtr> thenBranch;
-    vector<StmtPtr> elseBranch;
+    StmtPtr thenBranch;
+    StmtPtr elseBranch;
 
-    IfStmt(ExprPtr condition, vector<StmtPtr> thenBranch, vector<StmtPtr> elseBranch)
+    IfStmt(ExprPtr condition, StmtPtr thenBranch, StmtPtr elseBranch)
         : condition(condition), thenBranch(thenBranch), elseBranch(elseBranch) {}
 
     std::string toString() const override
     {
-        std::string result = "if " + condition->toString() + " {\n";
-        for (const auto &stmt : thenBranch)
+        std::string result = "if (" + condition->toString() + ") ";
+        result += thenBranch->toString();
+        if (elseBranch)
         {
-            result += "  " + stmt->toString() + "\n";
-        }
-        result += "}";
-        if (!elseBranch.empty())
-        {
-            result += " else {\n";
-            for (const auto &stmt : elseBranch)
-            {
-                result += "  " + stmt->toString() + "\n";
-            }
-            result += "}";
+            result += " else " + elseBranch->toString();
         }
         return result;
     }
@@ -170,19 +160,13 @@ class WhileStmt : public Statement
 {
 public:
     ExprPtr condition;
-    vector<StmtPtr> body;
+    StmtPtr body;
 
-    WhileStmt(ExprPtr condition, vector<StmtPtr> body)
+    WhileStmt(ExprPtr condition, StmtPtr body)
         : condition(condition), body(body) {}
 
     std::string toString() const override
     {
-        std::string result = "while " + condition->toString() + " {\n";
-        for (const auto &stmt : body)
-        {
-            result += "  " + stmt->toString() + "\n";
-        }
-        result += "}";
-        return result;
+        return "while (" + condition->toString() + ") " + body->toString();
     }
 };
