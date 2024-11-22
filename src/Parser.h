@@ -1,3 +1,17 @@
+/**
+ * @file Parser.h
+ * @brief Parser interface for MiniLang
+ * 
+ * This file defines the interface for the recursive descent parser.
+ * It includes:
+ * 1. Parser state management
+ * 2. Function declarations for parsing different language constructs
+ * 3. Helper function declarations for token handling
+ * 
+ * The parser implements a top-down parsing strategy, with separate functions
+ * for each grammar rule in the language.
+ */
+
 #pragma once
 #include "Token.h"
 #include "AST.h"
@@ -11,6 +25,7 @@ struct ParserState
     const std::vector<Token> &tokens;
     size_t current;
 
+    // Constructor
     ParserState(const std::vector<Token> &tokens) : tokens(tokens), current(0) {}
 };
 

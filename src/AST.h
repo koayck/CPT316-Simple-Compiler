@@ -1,3 +1,25 @@
+/**
+ * @file AST.h
+ * @brief Abstract Syntax Tree node definitions for MiniLang
+ * 
+ * This file defines the class hierarchy for the Abstract Syntax Tree (AST).
+ * The AST represents the syntactic structure of the program in a tree format.
+ * 
+ * Class hierarchy:
+ * - Expression (abstract base class for expressions)
+ *   - BinaryExpr (arithmetic and comparison operations)
+ *   - LiteralExpr (numbers and strings)
+ *   - VariableExpr (variable references)
+ * 
+ * - Statement (abstract base class for statements)
+ *   - AssignmentStmt (variable assignments)
+ *   - TypeDeclarationStmt (variable declarations)
+ *   - PrintStmt (print statements)
+ *   - InputStmt (read statements)
+ *   - IfStmt (conditional statements)
+ *   - WhileStmt (loops)
+ */
+
 #pragma once
 #include <memory>
 #include <vector>

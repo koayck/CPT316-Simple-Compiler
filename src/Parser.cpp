@@ -1,9 +1,26 @@
+/**
+ * @file Parser.cpp
+ * @brief Implementation of the recursive descent parser for MiniLang
+ * 
+ * This file implements a recursive descent parser that converts tokens into an Abstract Syntax Tree (AST).
+ * It follows the grammar rules of MiniLang and handles:
+ * - Statements (if, while, print, input, assignments, declarations)
+ * - Expressions (arithmetic, comparison, variables, literals)
+ * - Error reporting with line numbers
+ */
+
 #include "Parser.h"
 #include <iostream>
 #include <memory>
 
 using namespace std;
 
+/**
+ * @brief Main parsing function that processes all tokens into statements
+ * 
+ * @param tokens Vector of tokens from lexical analysis
+ * @return vector<StmtPtr> Vector of parsed statements
+ */
 vector<StmtPtr> parse(const vector<Token> &tokens)
 {
   ParserState state(tokens);
@@ -16,6 +33,9 @@ vector<StmtPtr> parse(const vector<Token> &tokens)
   return statements;
 }
 
+/**
+ * @brief Helper functions for token manipulation
+ */
 bool isAtEnd(const ParserState &state)
 {
   return peek(state).type == TokenType::EOF_TOKEN;
@@ -60,6 +80,21 @@ bool match(ParserState &state, TokenType type)
   return false;
 }
 
+/**
+ * @brief Parses a single statement based on the current token
+ * 
+ * Handles:
+ * - If statements
+ * - While loops
+ * - Print statements
+ * - Type declarations
+ * - Assignments
+ * - Input statements
+ * 
+ * @param state Current parser state
+ * @return StmtPtr Pointer to the parsed statement
+ * @throws runtime_error if parsing fails
+ */
 StmtPtr parseStatement(ParserState &state)
 {
   try

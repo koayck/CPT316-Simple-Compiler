@@ -1,3 +1,20 @@
+/**
+ * @file Lexer.cpp
+ * @brief Implementation of the lexical analyzer for MiniLang
+ * 
+ * This file implements the lexical analysis phase of the compiler.
+ * Key features:
+ * 1. Token recognition and creation
+ * 2. Keyword handling
+ * 3. Number literal parsing (integer and double)
+ * 4. String literal parsing
+ * 5. Identifier recognition
+ * 6. Error handling with line numbers
+ * 
+ * The lexer processes the input character by character and groups them into tokens
+ * according to the language specification.
+ */
+
 #include "Lexer.h"
 #include <unordered_map>
 #include <string>

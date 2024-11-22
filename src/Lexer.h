@@ -1,4 +1,15 @@
-// include guard to prevent multiple inclusions of the same header file within a single compilation unit
+/**
+ * @file Lexer.h
+ * @brief Lexical analyzer interface for MiniLang
+ * 
+ * This file defines the Lexer class which performs lexical analysis (tokenization).
+ * The lexer converts source code text into a sequence of tokens by:
+ * - Identifying keywords, operators, and literals
+ * - Handling whitespace and comments
+ * - Tracking line numbers for error reporting
+ * - Managing source code position
+ */
+
 #pragma once
 #include "Token.h"
 #include <string>

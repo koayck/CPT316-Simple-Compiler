@@ -1,3 +1,14 @@
+/**
+ * @file Token.h
+ * @brief Token definitions and handling for MiniLang
+ * 
+ * This file defines the token types and token structure used in lexical analysis.
+ * It includes:
+ * - Token type enumeration (keywords, operators, literals, etc.)
+ * - Token structure (type, lexeme, value, line number)
+ * - String conversion utilities for tokens
+ */
+
 #pragma once
 #include <string>
 #include <iostream>
