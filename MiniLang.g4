@@ -2,87 +2,76 @@
 grammar MiniLang;
 
 // Define the main parser rules
-
 program : statement+ EOF;
 
-statement
-    : assignment
-    | output
-    | input
-    | ifStatement
-    | whileLoop
-    | COMMENT
-    ;
+statement : typeDeclaration | assignment | output | input | ifStatement | whileLoop | COMMENT;
 
-assignment
-    : IDENTIFIER '=' expression ';'
-    ;
+typeDeclaration : type IDENTIFIER ('=' (expression | input))? ';';
 
-output
-    : 'p' '(' STRING ')' ';'
-    ;
+type : 'int' | 'double' | 'string' | 'bool';
 
-input
-    : IDENTIFIER '=' 'r' '(' STRING ')' ';'
-    ;
+assignment : IDENTIFIER '=' expression ';';
 
-ifStatement
-    : 'if' condition '{' statement* '}' ('else' '{' statement* '}')?
-    ;
+output : 'p' '(' expression ')' ';';
 
-whileLoop
-    : 'while' condition '{' statement* '}'
-    ;
+input : IDENTIFIER '=' 'r' '(' STRING ')' ';' | type IDENTIFIERp '=' 'r' '(' STRING ')' ';';
+
+ifStatement : 'if' '(' condition ')' statement ('else' statement)?;
+
+whileLoop : 'while' '(' condition ')' statement;
 
 // Expressions
+expression : term (('+' | '-') term)*;
 
-expression
-    : expression op=('*' | '/') expression   # MulDivExpr
-    | expression op=('+' | '-') expression   # AddSubExpr
-    | expression '**' expression             # ExpExpr
-    | '(' expression ')'                     # ParenExpr
-    | IDENTIFIER                             # VarExpr
-    | INT                                    # IntExpr
-    | DOUBLE                                 # DoubleExpr
-    ;
+term : factor (('*' | '/') factor)*;
+
+factor : primary | '(' expression ')';
+
+primary : IDENTIFIER | INTEGER | DOUBLE | STRING | BOOLEAN;
 
 // Conditions
+condition : expression relop expression | '!' condition | condition '&&' condition | condition '||' condition;
 
-condition
-    : expression relop expression
-    | '!' condition
-    | condition '&&' condition
-    | condition '||' condition
-    ;
-
-relop
-    : '>' | '<' | '>=' | '<=' | '==' | '!='
-    ;
+relop : '>' | '<' | '>=' | '<=' | '==' | '!=';
 
 // Define lexer rules
+IDENTIFIER : [a-zA-Z_] [a-zA-Z_0-9]*;
+INTEGER : [0-9]+;
+DOUBLE : [0-9]+ '.' [0-9]+;
+STRING : '"' (~["])* '"';
+BOOLEAN : 'true' | 'false';
 
-IDENTIFIER : [a-zA-Z_] [a-zA-Z_0-9]* ;
+COMMENT : '#' ~[\r\n]* -> skip;
+WS : [ \t\r\n]+ -> skip;
 
-INT : [0-9]+ ;
-
-DOUBLE : [0-9]+ '.' [0-9]+ ;
-
-STRING : '"' (~["])* '"' ;
-
-COMMENT : '#' ~[\r\n]* -> skip ;
-
-WS : [ \t\r\n]+ -> skip ;
+// Keywords
+IF : 'if';
+ELSE : 'else';
+WHILE : 'while';
+TYPE_INT : 'int';
+TYPE_DOUBLE : 'double';
+TYPE_STRING : 'string';
+TYPE_BOOL : 'bool';
 
 // Operators
-ADD : '+';
-SUB : '-';
-MUL : '*';
-DIV : '/';
-EXP : '**';
+PLUS : '+';
+MINUS : '-';
+MULTIPLY : '*';
+DIVIDE : '/';
+ASSIGN : '=';
+EQUAL : '==';
+NOT_EQUAL : '!=';
+GREATER : '>';
+LESS : '<';
+GREATER_EQUAL : '>=';
+LESS_EQUAL : '<=';
+AND : '&&';
+OR : '||';
+NOT : '!';
 
-// Separators and delimiters
-SEPARATOR : ';';
+// Separators
 LPAREN : '(';
 RPAREN : ')';
 LBRACE : '{';
 RBRACE : '}';
+SEMICOLON : ';';
