@@ -190,74 +190,6 @@ StmtPtr parseInput(ParserState &state)
   return make_shared<InputStmt>(name, prompt);
 }
 
-/**
- * @brief Parses a type declaration statement
- * 
- * Handles declarations with:
- * - No initialization: int x;
- * - Expression initialization: int x = 5;
- * - Input initialization: int x = r("Enter x: ");
- * 
- * @param state Current parser state
- * @return StmtPtr Pointer to a TypeDeclarationStmt node
- * @throws runtime_error if the declaration syntax is invalid
- */
-StmtPtr parseTypeDeclaration(ParserState &state)
-{
-  Token type = previous(state);
-  Token name = advance(state);
-
-  if (name.type != TokenType::IDENTIFIER)
-  {
-    throw runtime_error("Line " + to_string(peek(state).line) +
-                        ": Expected variable name after type");
-  }
-
-  ExprPtr initializer = nullptr;
-  if (match(state, TokenType::ASSIGN))
-  {
-    // Check if it's an input statement
-    if (peek(state).type == TokenType::READ || peek(state).lexeme == "r")
-    {
-      // Create an InputStmt but wrap it in a TypeDeclarationStmt
-      if (peek(state).lexeme == "r") {
-        advance(state); // Consume 'r'
-      } else {
-        match(state, TokenType::READ); // Consume 'read'
-      }
-
-      consume(state, TokenType::LPAREN, "Expected '(' after 'r'");
-      
-      if (!match(state, TokenType::STRING))
-      {
-        throw runtime_error("Line " + to_string(peek(state).line) +
-                          ": Expected string prompt in r statement");
-      }
-      Token prompt = previous(state);
-      
-      consume(state, TokenType::RPAREN, "Expected ')' after prompt");
-      consume(state, TokenType::SEMICOLON, "Expected ';' after r statement");
-
-      // Create an InputStmt and store it
-      auto inputStmt = make_shared<InputStmt>(name, prompt);
-      
-      // Return a TypeDeclarationStmt with the InputStmt
-      return make_shared<TypeDeclarationStmt>(type, name, nullptr, inputStmt);
-    }
-    else
-    {
-      // Regular initialization
-      initializer = parseExpression(state);
-      consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
-    }
-  }
-  else
-  {
-    consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
-  }
-
-  return make_shared<TypeDeclarationStmt>(type, name, initializer);
-}
 
 /**
  * @brief Parses a print statement in the form: print expression;
@@ -428,16 +360,22 @@ ExprPtr parseFactor(ParserState &state)
 }
 
 /**
- * @brief Parses a primary expression
+ * @brief Parses a primary expression (literals, variables, or parenthesized expressions)
  * 
- * Handles:
- * - Literals (numbers, strings, booleans)
- * - Variables
+ * Primary expressions are the atomic building blocks of more complex expressions.
+ * This function handles:
+ * - Numeric literals (integers and doubles)
+ * - String literals
+ * - Boolean literals
+ * - Variable references
  * - Parenthesized expressions
  * 
+ * Grammar rule:
+ * primary -> NUMBER | STRING | BOOLEAN | IDENTIFIER | '(' expression ')'
+ * 
  * @param state Current parser state
- * @return ExprPtr Pointer to the resulting expression
- * @throws runtime_error if the expression is invalid
+ * @return ExprPtr Pointer to the parsed primary expression
+ * @throws runtime_error if an invalid expression is encountered
  */
 ExprPtr parsePrimary(ParserState &state)
 {
@@ -469,4 +407,105 @@ ExprPtr parsePrimary(ParserState &state)
   }
 
   throw runtime_error("Expected expression");
+}
+
+/**
+ * @brief Parses an expression
+ * 
+ * This function handles expressions at the addition/subtraction level.
+ * It follows the operator precedence by first parsing terms (multiplication/division)
+ * and then handling any + or - operators.
+ * 
+ * Grammar rule:
+ * expression -> term (('+' | '-') term)*
+ * 
+ * @param state Current parser state
+ * @return ExprPtr Pointer to the parsed expression
+ */
+ExprPtr parseExpression(ParserState &state)
+{
+    ExprPtr expr = parseTerm(state);
+
+    while (match(state, TokenType::PLUS) || match(state, TokenType::MINUS))
+    {
+        Token op = previous(state);
+        ExprPtr right = parseTerm(state);
+        expr = make_shared<BinaryExpr>(expr, op, right);
+    }
+
+    return expr;
+}
+
+/**
+ * @brief Parses a type declaration statement with optional initialization
+ * 
+ * This function handles three forms of type declarations:
+ * 1. Simple declaration: type identifier;
+ * 2. Declaration with initialization: type identifier = expression;
+ * 3. Declaration with input: type identifier = r("prompt");
+ * 
+ * Example valid declarations:
+ * - int x;
+ * - double y = 3.14;
+ * - string name = r("Enter name: ");
+ * 
+ * @param state Current parser state
+ * @return StmtPtr Pointer to TypeDeclarationStmt
+ * @throws runtime_error if declaration syntax is invalid
+ */
+StmtPtr parseTypeDeclaration(ParserState &state)
+{
+    Token type = previous(state);
+    Token name = advance(state);
+
+    if (name.type != TokenType::IDENTIFIER)
+    {
+        throw runtime_error("Line " + to_string(peek(state).line) +
+                            ": Expected variable name after type");
+    }
+
+    ExprPtr initializer = nullptr;
+    if (match(state, TokenType::ASSIGN))
+    {
+        // Check if it's an input statement
+        if (peek(state).type == TokenType::READ || peek(state).lexeme == "r")
+        {
+            // Create an InputStmt but wrap it in a TypeDeclarationStmt
+            if (peek(state).lexeme == "r") {
+                advance(state); // Consume 'r'
+            } else {
+                match(state, TokenType::READ); // Consume 'read'
+            }
+
+            consume(state, TokenType::LPAREN, "Expected '(' after 'r'");
+            
+            if (!match(state, TokenType::STRING))
+            {
+                throw runtime_error("Line " + to_string(peek(state).line) +
+                                    ": Expected string prompt in r statement");
+            }
+            Token prompt = previous(state);
+            
+            consume(state, TokenType::RPAREN, "Expected ')' after prompt");
+            consume(state, TokenType::SEMICOLON, "Expected ';' after r statement");
+
+            // Create an InputStmt and store it
+            auto inputStmt = make_shared<InputStmt>(name, prompt);
+            
+            // Return a TypeDeclarationStmt with the InputStmt
+            return make_shared<TypeDeclarationStmt>(type, name, nullptr, inputStmt);
+        }
+        else
+        {
+            // Regular initialization
+            initializer = parseExpression(state);
+            consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
+        }
+    }
+    else
+    {
+        consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
+    }
+
+    return make_shared<TypeDeclarationStmt>(type, name, initializer);
 }
