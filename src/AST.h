@@ -77,6 +77,9 @@ public:
 
     std::string toString() const override
     {
+        if (value.type == TokenType::BOOLEAN) {
+            return value.numValue != 0 ? "true" : "false";
+        }
         return value.lexeme;
     }
 };
@@ -110,18 +113,38 @@ public:
     }
 };
 
+class InputStmt : public Statement
+{
+public:
+    Token name;
+    Token prompt;
+
+    InputStmt(Token name, Token prompt)
+        : name(name), prompt(prompt) {}
+
+    std::string toString() const override
+    {
+        return name.lexeme + " = read(\"" + prompt.lexeme + "\");";
+    }
+};
+
 class TypeDeclarationStmt : public Statement
 {
 public:
     Token type;
     Token name;
     ExprPtr initializer;
+    StmtPtr inputStmt;
 
-    TypeDeclarationStmt(Token type, Token name, ExprPtr initializer)
-        : type(type), name(name), initializer(initializer) {}
+    TypeDeclarationStmt(Token type, Token name, ExprPtr initializer, StmtPtr inputStmt = nullptr)
+        : type(type), name(name), initializer(initializer), inputStmt(inputStmt) {}
 
     std::string toString() const override
     {
+        if (inputStmt) {
+            auto input = dynamic_pointer_cast<InputStmt>(inputStmt);
+            return type.lexeme + " " + name.lexeme + " = r(\"" + input->prompt.lexeme + "\");";
+        }
         if (initializer)
         {
             return type.lexeme + " " + name.lexeme + " = " + initializer->toString() + ";";
@@ -140,19 +163,6 @@ public:
     std::string toString() const override
     {
         return "print " + expression->toString() + ";";
-    }
-};
-
-class InputStmt : public Statement
-{
-public:
-    Token name;
-
-    explicit InputStmt(Token name) : name(name) {}
-
-    std::string toString() const override
-    {
-        return name.lexeme + " = read;";
     }
 };
 

@@ -24,6 +24,7 @@ enum class TokenType
     TYPE_INT,
     TYPE_DOUBLE,
     TYPE_STRING,
+    TYPE_BOOL,
 
     // Operators
     PLUS,
@@ -58,6 +59,7 @@ enum class TokenType
     INTEGER,
     DOUBLE,
     STRING,
+    BOOLEAN,
 
     // Special
     PRINT, // 'p'

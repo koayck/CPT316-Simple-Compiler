@@ -1,7 +1,8 @@
-int x;
-int y;
+int x = r("Enter value for x: ");
 
-x = 1;
+int y = 22;
+
 y = x + 2;
 
 p(x);
+p(y);

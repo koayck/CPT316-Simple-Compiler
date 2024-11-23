@@ -27,7 +27,11 @@ static const unordered_map<string, TokenType> keywords = {
     {"while", TokenType::WHILE},
     {"int", TokenType::TYPE_INT},
     {"double", TokenType::TYPE_DOUBLE},
-    {"string", TokenType::TYPE_STRING}};
+    {"string", TokenType::TYPE_STRING},
+    {"bool", TokenType::TYPE_BOOL},
+    {"true", TokenType::BOOLEAN},
+    {"false", TokenType::BOOLEAN}
+};
 
 // tokenizes the source code and returns a vector of tokens
 vector<Token> Lexer::tokenize()
@@ -82,18 +86,20 @@ Token Lexer::number()
 Token Lexer::identifier()
 {
     while (isAlphaNumeric(peek()))
-        advance(); // Consume alphanumeric characters
+        advance();
 
     std::string text = source.substr(start, current - start);
 
-    // Check if it's a data type or other keyword
+    // Check if it's a keyword
     auto it = keywords.find(text);
-    if (it != keywords.end())
-    {
+
+    if (it != keywords.end()) {
+        if (text == "true" || text == "false") {
+            return Token(TokenType::BOOLEAN, text, text == "true" ? 1.0 : 0.0, line);
+        }
         return makeToken(it->second);
     }
 
-    // If it's not a keyword, return an IDENTIFIER token
     return makeToken(TokenType::IDENTIFIER);
 }
 
@@ -168,7 +174,9 @@ Token Lexer::scanToken()
             return makeToken(TokenType::PRINT);
         break;
     case 'r':
-        return makeToken(TokenType::READ);
+        if (peek() == '(')
+            return makeToken(TokenType::READ);
+        return identifier();
     }
 
     if (isDigit(c))
@@ -318,6 +326,10 @@ string tokenTypeToString(TokenType type)
         return "TYPE_DOUBLE";
     case TokenType::TYPE_STRING:
         return "TYPE_STRING";
+    case TokenType::TYPE_BOOL:
+        return "TYPE_BOOL";
+    case TokenType::BOOLEAN:
+        return "BOOLEAN";
     default:
         return "UNKNOWN"; // Fallback for any unrecognized type
     }

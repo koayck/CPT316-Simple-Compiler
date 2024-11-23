@@ -66,4 +66,6 @@ private:
     static bool isAlpha(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
     static bool isAlphaNumeric(char c) { return isAlpha(c) || isDigit(c); }
     void skipWhitespace();
+
+    bool checkKeyword(int start, const std::string& rest);
 };

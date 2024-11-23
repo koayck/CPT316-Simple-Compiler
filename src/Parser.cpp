@@ -1,7 +1,7 @@
 /**
  * @file Parser.cpp
  * @brief Implementation of the recursive descent parser for MiniLang
- * 
+ *
  * This file implements a recursive descent parser that converts tokens into an Abstract Syntax Tree (AST).
  * It follows the grammar rules of MiniLang and handles:
  * - Statements (if, while, print, input, assignments, declarations)
@@ -10,6 +10,7 @@
  */
 
 #include "Parser.h"
+#include "AST.h"
 #include <iostream>
 #include <memory>
 
@@ -17,7 +18,7 @@ using namespace std;
 
 /**
  * @brief Main parsing function that processes all tokens into statements
- * 
+ *
  * @param tokens Vector of tokens from lexical analysis
  * @return vector<StmtPtr> Vector of parsed statements
  */
@@ -82,7 +83,7 @@ bool match(ParserState &state, TokenType type)
 
 /**
  * @brief Parses a single statement based on the current token
- * 
+ *
  * Handles:
  * - If statements
  * - While loops
@@ -90,13 +91,14 @@ bool match(ParserState &state, TokenType type)
  * - Type declarations
  * - Assignments
  * - Input statements
- * 
+ *
  * @param state Current parser state
  * @return StmtPtr Pointer to the parsed statement
  * @throws runtime_error if parsing fails
  */
 StmtPtr parseStatement(ParserState &state)
 {
+  cout << "debug" << endl;
   try
   {
     if (match(state, TokenType::IF))
@@ -113,15 +115,20 @@ StmtPtr parseStatement(ParserState &state)
     }
     if (match(state, TokenType::TYPE_INT) ||
         match(state, TokenType::TYPE_DOUBLE) ||
-        match(state, TokenType::TYPE_STRING))
+        match(state, TokenType::TYPE_STRING) ||
+        match(state, TokenType::TYPE_BOOL))
     {
       return parseTypeDeclaration(state);
     }
     if (peek(state).type == TokenType::IDENTIFIER &&
         peekNext(state).type == TokenType::ASSIGN)
     {
-      if (peekNext(state, 2).type == TokenType::READ)
+      cout << "ASSIGN" << endl;
+      if (peekNext(state, 2).type == TokenType::READ ||
+          peekNext(state, 2).lexeme == "r")
       {
+        cout << "INPUT" << endl;
+        cout << peekNext(state, 2).lexeme << endl;
         return parseInput(state);
       }
       return parseAssignment(state);
@@ -139,6 +146,62 @@ StmtPtr parseStatement(ParserState &state)
   }
 }
 
+/**
+ * @brief Parses an input statement in the form: variable = r("prompt");
+ * 
+ * This function handles both standalone input statements and input statements
+ * within type declarations. The syntax is:
+ * - Simple input: x = r("Enter x: ");
+ * - Typed input: int x = r("Enter x: ");
+ * 
+ * @param state Current parser state containing tokens and position
+ * @return StmtPtr Pointer to an InputStmt node
+ * @throws runtime_error if the input statement syntax is invalid
+ */
+StmtPtr parseInput(ParserState &state)
+{
+  Token name = advance(state); // Get variable name
+  consume(state, TokenType::ASSIGN, "Expected '=' after variable name");
+
+  // Check for either READ token or 'r'
+  if (!match(state, TokenType::READ) && peek(state).lexeme != "r")
+  {
+    throw runtime_error("Line " + to_string(peek(state).line) +
+                        ": Expected 'r' after '='");
+  }
+  if (peek(state).lexeme == "r")
+  {
+    advance(state); // Consume 'r'
+  }
+
+  consume(state, TokenType::LPAREN, "Expected '(' after 'r'");
+
+  // Expect a string literal for the prompt
+  if (!match(state, TokenType::STRING))
+  {
+    throw runtime_error("Line " + to_string(peek(state).line) +
+                        ": Expected string prompt in r statement");
+  }
+  Token prompt = previous(state);
+
+  consume(state, TokenType::RPAREN, "Expected ')' after prompt");
+  consume(state, TokenType::SEMICOLON, "Expected ';' after r statement");
+
+  return make_shared<InputStmt>(name, prompt);
+}
+
+/**
+ * @brief Parses a type declaration statement
+ * 
+ * Handles declarations with:
+ * - No initialization: int x;
+ * - Expression initialization: int x = 5;
+ * - Input initialization: int x = r("Enter x: ");
+ * 
+ * @param state Current parser state
+ * @return StmtPtr Pointer to a TypeDeclarationStmt node
+ * @throws runtime_error if the declaration syntax is invalid
+ */
 StmtPtr parseTypeDeclaration(ParserState &state)
 {
   Token type = previous(state);
@@ -153,13 +216,134 @@ StmtPtr parseTypeDeclaration(ParserState &state)
   ExprPtr initializer = nullptr;
   if (match(state, TokenType::ASSIGN))
   {
-    initializer = parseExpression(state);
+    // Check if it's an input statement
+    if (peek(state).type == TokenType::READ || peek(state).lexeme == "r")
+    {
+      // Create an InputStmt but wrap it in a TypeDeclarationStmt
+      if (peek(state).lexeme == "r") {
+        advance(state); // Consume 'r'
+      } else {
+        match(state, TokenType::READ); // Consume 'read'
+      }
+
+      consume(state, TokenType::LPAREN, "Expected '(' after 'r'");
+      
+      if (!match(state, TokenType::STRING))
+      {
+        throw runtime_error("Line " + to_string(peek(state).line) +
+                          ": Expected string prompt in r statement");
+      }
+      Token prompt = previous(state);
+      
+      consume(state, TokenType::RPAREN, "Expected ')' after prompt");
+      consume(state, TokenType::SEMICOLON, "Expected ';' after r statement");
+
+      // Create an InputStmt and store it
+      auto inputStmt = make_shared<InputStmt>(name, prompt);
+      
+      // Return a TypeDeclarationStmt with the InputStmt
+      return make_shared<TypeDeclarationStmt>(type, name, nullptr, inputStmt);
+    }
+    else
+    {
+      // Regular initialization
+      initializer = parseExpression(state);
+      consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
+    }
+  }
+  else
+  {
+    consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
   }
 
-  consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
   return make_shared<TypeDeclarationStmt>(type, name, initializer);
 }
 
+/**
+ * @brief Parses a print statement in the form: print expression;
+ * 
+ * @param state Current parser state
+ * @return StmtPtr Pointer to a PrintStmt node
+ * @throws runtime_error if the print statement syntax is invalid
+ */
+StmtPtr parsePrint(ParserState &state)
+{
+  ExprPtr value = parseExpression(state);
+  consume(state, TokenType::SEMICOLON, "Expected ';' after value");
+  return make_shared<PrintStmt>(value);
+}
+
+/**
+ * @brief Parses an if statement with optional else branch
+ * 
+ * Syntax: if (condition) statement [else statement]
+ * 
+ * @param state Current parser state
+ * @return StmtPtr Pointer to an IfStmt node
+ * @throws runtime_error if the if statement syntax is invalid
+ */
+StmtPtr parseIf(ParserState &state)
+{
+  consume(state, TokenType::LPAREN, "Expected '(' after 'if'");
+  ExprPtr condition = parseComparison(state);
+  consume(state, TokenType::RPAREN, "Expected ')' after if condition");
+
+  StmtPtr thenBranch = parseStatement(state);
+  StmtPtr elseBranch = nullptr;
+
+  if (match(state, TokenType::ELSE))
+  {
+    elseBranch = parseStatement(state);
+  }
+
+  return make_shared<IfStmt>(condition, thenBranch, elseBranch);
+}
+
+/**
+ * @brief Parses a while loop statement
+ * 
+ * Syntax: while (condition) statement
+ * 
+ * @param state Current parser state
+ * @return StmtPtr Pointer to a WhileStmt node
+ * @throws runtime_error if the while statement syntax is invalid
+ */
+StmtPtr parseWhile(ParserState &state)
+{
+  consume(state, TokenType::LPAREN, "Expected '(' after 'while'");
+  ExprPtr condition = parseComparison(state);
+  consume(state, TokenType::RPAREN, "Expected ')' after while condition");
+
+  StmtPtr body = parseStatement(state);
+  return make_shared<WhileStmt>(condition, body);
+}
+
+/**
+ * @brief Parses an assignment statement
+ * 
+ * Syntax: identifier = expression;
+ * 
+ * @param state Current parser state
+ * @return StmtPtr Pointer to an AssignmentStmt node
+ * @throws runtime_error if the assignment syntax is invalid
+ */
+StmtPtr parseAssignment(ParserState &state)
+{
+  Token name = advance(state);
+  consume(state, TokenType::ASSIGN, "Expected '=' after variable name");
+  ExprPtr value = parseExpression(state);
+  consume(state, TokenType::SEMICOLON, "Expected ';' after value");
+  return make_shared<AssignmentStmt>(name, value);
+}
+
+/**
+ * @brief Parses a comparison expression
+ * 
+ * Handles comparison operators: >, <, >=, <=, ==, !=
+ * 
+ * @param state Current parser state
+ * @return ExprPtr Pointer to a BinaryExpr node for the comparison
+ */
 ExprPtr parseComparison(ParserState &state)
 {
   ExprPtr expr = parseExpression(state);
@@ -179,6 +363,14 @@ ExprPtr parseComparison(ParserState &state)
   return expr;
 }
 
+/**
+ * @brief Helper function to consume an expected token
+ * 
+ * @param state Current parser state
+ * @param type Expected token type
+ * @param message Error message if token doesn't match
+ * @throws runtime_error if the expected token is not found
+ */
 void consume(ParserState &state, TokenType type, const string &message)
 {
   if (check(state, type))
@@ -189,63 +381,15 @@ void consume(ParserState &state, TokenType type, const string &message)
   throw runtime_error("Line " + to_string(peek(state).line) + ": " + message);
 }
 
-StmtPtr parseIf(ParserState &state)
-{
-  consume(state, TokenType::LPAREN, "Expected '(' after 'if'");
-  ExprPtr condition = parseComparison(state);
-  consume(state, TokenType::RPAREN, "Expected ')' after if condition");
-
-  StmtPtr thenBranch = parseStatement(state);
-  StmtPtr elseBranch = nullptr;
-
-  if (match(state, TokenType::ELSE))
-  {
-    elseBranch = parseStatement(state);
-  }
-
-  return make_shared<IfStmt>(condition, thenBranch, elseBranch);
-}
-
-StmtPtr parseWhile(ParserState &state)
-{
-  consume(state, TokenType::LPAREN, "Expected '(' after 'while'");
-  ExprPtr condition = parseComparison(state);
-  consume(state, TokenType::RPAREN, "Expected ')' after while condition");
-
-  StmtPtr body = parseStatement(state);
-  return make_shared<WhileStmt>(condition, body);
-}
-
-StmtPtr parsePrint(ParserState &state)
-{
-  ExprPtr value = parseExpression(state);
-  consume(state, TokenType::SEMICOLON, "Expected ';' after value");
-  return make_shared<PrintStmt>(value);
-}
-
-StmtPtr parseInput(ParserState &state)
-{
-  Token name = advance(state);
-  consume(state, TokenType::ASSIGN, "Expected '=' after variable name");
-  consume(state, TokenType::READ, "Expected 'read' after '='");
-  consume(state, TokenType::SEMICOLON, "Expected ';' after 'read'");
-  return make_shared<InputStmt>(name);
-}
-
-StmtPtr parseAssignment(ParserState &state)
-{
-  Token name = advance(state);
-  consume(state, TokenType::ASSIGN, "Expected '=' after variable name");
-  ExprPtr value = parseExpression(state);
-  consume(state, TokenType::SEMICOLON, "Expected ';' after value");
-  return make_shared<AssignmentStmt>(name, value);
-}
-
-ExprPtr parseExpression(ParserState &state)
-{
-  return parseTerm(state);
-}
-
+/**
+ * @brief Parses a term (addition/subtraction)
+ * 
+ * Handles operators: +, -
+ * Has lower precedence than multiplication/division
+ * 
+ * @param state Current parser state
+ * @return ExprPtr Pointer to the resulting expression
+ */
 ExprPtr parseTerm(ParserState &state)
 {
   ExprPtr expr = parseFactor(state);
@@ -260,6 +404,15 @@ ExprPtr parseTerm(ParserState &state)
   return expr;
 }
 
+/**
+ * @brief Parses a factor (multiplication/division)
+ * 
+ * Handles operators: *, /
+ * Has higher precedence than addition/subtraction
+ * 
+ * @param state Current parser state
+ * @return ExprPtr Pointer to the resulting expression
+ */
 ExprPtr parseFactor(ParserState &state)
 {
   ExprPtr expr = parsePrimary(state);
@@ -274,15 +427,31 @@ ExprPtr parseFactor(ParserState &state)
   return expr;
 }
 
+/**
+ * @brief Parses a primary expression
+ * 
+ * Handles:
+ * - Literals (numbers, strings, booleans)
+ * - Variables
+ * - Parenthesized expressions
+ * 
+ * @param state Current parser state
+ * @return ExprPtr Pointer to the resulting expression
+ * @throws runtime_error if the expression is invalid
+ */
 ExprPtr parsePrimary(ParserState &state)
 {
-  if (match(state, TokenType::INTEGER) || match(state, TokenType::DOUBLE))
+  if (match(state, TokenType::INTEGER) ||
+      match(state, TokenType::DOUBLE) ||
+      match(state, TokenType::BOOLEAN))
   {
     return make_shared<LiteralExpr>(previous(state));
   }
 
   if (match(state, TokenType::STRING))
   {
+    cout << "STRING" << endl;
+    cout << previous(state).lexeme << endl;
     return make_shared<LiteralExpr>(previous(state));
   }
 
@@ -293,6 +462,7 @@ ExprPtr parsePrimary(ParserState &state)
 
   if (match(state, TokenType::LPAREN))
   {
+
     ExprPtr expr = parseExpression(state);
     consume(state, TokenType::RPAREN, "Expected ')' after expression");
     return expr;
