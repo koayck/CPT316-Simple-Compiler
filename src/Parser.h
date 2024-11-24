@@ -42,6 +42,7 @@ struct ParserState
 std::vector<StmtPtr> parse(const std::vector<Token> &tokens);
 
 // Token Stream Helper Functions
+
 /**
  * @brief Checks if we've reached the end of the token stream
  */
@@ -87,6 +88,7 @@ bool match(ParserState &state, TokenType type);
 void consume(ParserState &state, TokenType type, const std::string &message);
 
 // Statement Parsing Functions
+
 /**
  * @brief Parses any type of statement based on the current token
  * Dispatches to specific statement parsers based on the current token type
@@ -116,6 +118,13 @@ StmtPtr parsePrint(ParserState &state);
  * Format: input identifier
  */
 StmtPtr parseInput(ParserState &state);
+
+
+/**
+ * @brief Parses a block of statements enclosed in braces
+ * Format: { statement* }
+ */
+StmtPtr parseBlock(ParserState &state);
 
 /**
  * @brief Parses if statements with optional else clause

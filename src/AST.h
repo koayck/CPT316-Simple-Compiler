@@ -166,6 +166,24 @@ public:
     }
 };
 
+class BlockStmt : public Statement
+{
+public:
+    vector<StmtPtr> statements;
+
+    BlockStmt(vector<StmtPtr> statements) : statements(statements) {}
+
+    std::string toString() const override
+    {
+        std::string result = "{\n";
+        for (const auto& stmt : statements) {
+            result += "  " + stmt->toString() + "\n";
+        }
+        result += "}";
+        return result;
+    }
+};
+
 class IfStmt : public Statement
 {
 public:
