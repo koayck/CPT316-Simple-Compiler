@@ -1,8 +1,9 @@
-int x = r("Enter value for x: ");
+if (x>y) {
+  p(x); 
+    p(y);
+} else
+  p("1");
 
-int y = 22;
-
-y = x + 2;
-
-p(x);
-p(y);
+while (1) {
+  p("asas");
+}

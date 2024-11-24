@@ -16,6 +16,33 @@
 
 using namespace std;
 
+// Add this helper function at the top of Parser.cpp
+string createErrorMessage(const ParserState &state, const string &message) {
+    Token currentToken = peek(state);
+    int line = currentToken.line;
+    int column = currentToken.column;
+    
+    // Find the line content
+    string lineContent;
+    int currentLine = 1;
+    size_t pos = 0;
+    while (pos < state.tokens[0].lexeme.length() && currentLine < line) {
+        if (state.tokens[0].lexeme[pos] == '\n') currentLine++;
+        pos++;
+    }
+    size_t lineStart = pos;
+    while (pos < state.tokens[0].lexeme.length() && state.tokens[0].lexeme[pos] != '\n') {
+        lineContent += state.tokens[0].lexeme[pos++];
+    }
+
+    // Create the error message with line content and pointer
+    string errorMsg = "Line " + to_string(line) + ", Column " + to_string(column) + ": " + message + "\n";
+    errorMsg += lineContent + "\n";
+    errorMsg += string(column - 1, ' ') + "^";
+    
+    return errorMsg;
+}
+
 /**
  * @brief Main parsing function that processes all tokens into statements
  *
@@ -96,7 +123,7 @@ void consume(ParserState &state, TokenType type, const string &message)
     advance(state);
     return;
   }
-  throw runtime_error("Line " + to_string(peek(state).line) + ": " + message);
+  throw runtime_error(createErrorMessage(state, message));
 }
 
 /**
@@ -116,54 +143,47 @@ void consume(ParserState &state, TokenType type, const string &message)
  */
 StmtPtr parseStatement(ParserState &state)
 {
-  cout << "in parseStatement" << endl;
-  try
-  {
-    if (match(state, TokenType::IF))
+    try
     {
-      cout << "matching if " << endl;
-      cout << state.current << endl;
-      return parseIf(state);
-    }
-    if (match(state, TokenType::WHILE))
-    {
-      cout << peek(state) << endl;
-      cout << "matching while " << endl;
-      return parseWhile(state);
-    }
-    if (match(state, TokenType::PRINT))
-    {
-      return parsePrint(state);
-    }
-    if (match(state, TokenType::TYPE_INT) ||
-        match(state, TokenType::TYPE_DOUBLE) ||
-        match(state, TokenType::TYPE_STRING) ||
-        match(state, TokenType::TYPE_BOOL))
-    {
-      return parseTypeDeclaration(state);
-    }
-    if (peek(state).type == TokenType::IDENTIFIER &&
-        peekNext(state).type == TokenType::ASSIGN)
-    {
-      if (peekNext(state, 2).type == TokenType::READ ||
-          peekNext(state, 2).lexeme == "r")
-      {
-        return parseInput(state);
-      }
-      return parseAssignment(state);
-    }
-    // parse relational and 
+        if (match(state, TokenType::IF))
+        {
+            return parseIf(state);
+        }
+        if (match(state, TokenType::WHILE))
+        {
+            return parseWhile(state);
+        }
+        if (match(state, TokenType::PRINT))
+        {
+            return parsePrint(state);
+        }
+        if (match(state, TokenType::TYPE_INT) ||
+            match(state, TokenType::TYPE_DOUBLE) ||
+            match(state, TokenType::TYPE_STRING) ||
+            match(state, TokenType::TYPE_BOOL))
+        {
+            return parseTypeDeclaration(state);
+        }
+        if (peek(state).type == TokenType::IDENTIFIER)
+        {
+            if (peekNext(state).type == TokenType::ASSIGN)
+            {
+                if (peekNext(state, 2).type == TokenType::READ ||
+                    peekNext(state, 2).lexeme == "r")
+                {
+                    return parseInput(state);
+                }
+                return parseAssignment(state);
+            }
+        }
 
-    throw runtime_error("Expected statement");
-  }
-  catch (const runtime_error &e)
-  {
-    if (string(e.what()).find("Line") == string::npos)
-    {
-      throw runtime_error("Line " + to_string(peek(state).line) + ": " + e.what());
+        throw runtime_error(createErrorMessage(state, "Expected statement"));
     }
-    throw;
-  }
+    catch (const runtime_error &e)
+    {
+        // Propagate the error with the correct line number
+        throw;
+    }
 }
 
 /**
@@ -186,7 +206,8 @@ StmtPtr parseInput(ParserState &state)
   // Check for either READ token or 'r'
   if (!match(state, TokenType::READ) && peek(state).lexeme != "r")
   {
-    throw runtime_error("Line " + to_string(peek(state).line) +
+    throw runtime_error("Line " + to_string(peek(state).line) + 
+                        ", Column " + to_string(peek(state).column) + 
                         ": Expected 'r' after '='");
   }
   if (peek(state).lexeme == "r")
@@ -199,7 +220,8 @@ StmtPtr parseInput(ParserState &state)
   // Expect a string literal for the prompt
   if (!match(state, TokenType::STRING))
   {
-    throw runtime_error("Line " + to_string(peek(state).line) +
+    throw runtime_error("Line " + to_string(peek(state).line) + 
+                        ", Column " + to_string(peek(state).column) + 
                         ": Expected string prompt in r statement");
   }
   Token prompt = previous(state);
@@ -253,7 +275,7 @@ StmtPtr parseBlock(ParserState &state) {
 /**
  * @brief Parses an if statement with optional else branch
  *
- * Syntax: if (condition) statement [else statement]
+ * Syntax: if (condition) statement | { statements* } [else statement | { statements* }]
  *
  * @param state Current parser state
  * @return StmtPtr Pointer to an IfStmt node
@@ -261,19 +283,33 @@ StmtPtr parseBlock(ParserState &state) {
  */
 StmtPtr parseIf(ParserState &state)
 {
-  consume(state, TokenType::LPAREN, "Expected '(' after 'if'");
-  ExprPtr condition = parseComparison(state);
-  consume(state, TokenType::RPAREN, "Expected ')' after if condition");
+    consume(state, TokenType::LPAREN, "Expected '(' after 'if'");
+    ExprPtr condition = parseComparison(state);
+    consume(state, TokenType::RPAREN, "Expected ')' after if condition");
 
-  StmtPtr thenBranch = parseStatement(state);
-  StmtPtr elseBranch = nullptr;
+    // Parse the then branch
+    StmtPtr thenBranch;
+    if (check(state, TokenType::LBRACE)) {
+        // If we see a brace, parse as a block
+        thenBranch = parseBlock(state);
+    } else {
+        // Otherwise parse a single statement
+        thenBranch = parseStatement(state);
+    }
 
-  if (match(state, TokenType::ELSE))
-  {
-    elseBranch = parseStatement(state);
-  }
+    // Parse the optional else branch
+    StmtPtr elseBranch = nullptr;
+    if (match(state, TokenType::ELSE)) {
+        if (check(state, TokenType::LBRACE)) {
+            // If we see a brace, parse as a block
+            elseBranch = parseBlock(state);
+        } else {
+            // Otherwise parse a single statement
+            elseBranch = parseStatement(state);
+        }
+    }
 
-  return make_shared<IfStmt>(condition, thenBranch, elseBranch);
+    return make_shared<IfStmt>(condition, thenBranch, elseBranch);
 }
 
 /**
@@ -314,11 +350,21 @@ StmtPtr parseWhile(ParserState &state)
  */
 StmtPtr parseAssignment(ParserState &state)
 {
-  Token name = advance(state);
-  consume(state, TokenType::ASSIGN, "Expected '=' after variable name");
-  ExprPtr value = parseExpression(state);
-  consume(state, TokenType::SEMICOLON, "Expected ';' after value");
-  return make_shared<AssignmentStmt>(name, value);
+    Token name = advance(state);
+    consume(state, TokenType::ASSIGN, "Expected '=' after variable name");
+    ExprPtr value = parseExpression(state);
+    
+    // Check for semicolon immediately after the expression
+    if (!check(state, TokenType::SEMICOLON)) {
+        // Get the last token of the expression for error position
+        Token lastToken = previous(state);
+        throw runtime_error("Line " + to_string(lastToken.line) + 
+                          ", Column " + to_string(lastToken.column + lastToken.lexeme.length()) + 
+                          ": Expected ';' after value");
+    }
+    
+    consume(state, TokenType::SEMICOLON, "Expected ';' after value");
+    return make_shared<AssignmentStmt>(name, value);
 }
 
 /**
@@ -439,7 +485,7 @@ ExprPtr parsePrimary(ParserState &state)
     return expr;
   }
 
-  throw runtime_error("Expected expression");
+  throw runtime_error(createErrorMessage(state, "Expected expression"));
 }
 
 /**
@@ -488,62 +534,69 @@ ExprPtr parseExpression(ParserState &state)
  */
 StmtPtr parseTypeDeclaration(ParserState &state)
 {
-  Token type = previous(state);
-  Token name = advance(state);
+    Token type = previous(state);
+    Token name = advance(state);
 
-  if (name.type != TokenType::IDENTIFIER)
-  {
-    throw runtime_error("Line " + to_string(peek(state).line) +
-                        ": Expected variable name after type");
-  }
+    // Check if identifier starts with a number
+    if (name.type != TokenType::IDENTIFIER) {
+        if (name.type == TokenType::INTEGER || (name.type == TokenType::IDENTIFIER && isdigit(name.lexeme[0]))) {
+            throw runtime_error("Line " + to_string(peek(state).line) + 
+                              ", Column " + to_string(name.column) + 
+                              ": Invalid variable name: identifier cannot start with a number");
+        }
+        throw runtime_error("Line " + to_string(peek(state).line) + 
+                          ", Column " + to_string(name.column) + 
+                          ": Invalid variable name '" + name.lexeme + "'");
+    }
 
-  ExprPtr initializer = nullptr;
-  if (match(state, TokenType::ASSIGN))
-  {
-    // Check if it's an input statement
-    if (peek(state).type == TokenType::READ || peek(state).lexeme == "r")
+    ExprPtr initializer = nullptr;
+    if (match(state, TokenType::ASSIGN))
     {
-      // Create an InputStmt but wrap it in a TypeDeclarationStmt
-      if (peek(state).lexeme == "r")
-      {
-        advance(state); // Consume 'r'
-      }
-      else
-      {
-        match(state, TokenType::READ); // Consume 'read'
-      }
+        // Check if it's an input statement
+        if (peek(state).type == TokenType::READ || peek(state).lexeme == "r")
+        {
+            // Create an InputStmt but wrap it in a TypeDeclarationStmt
+            if (peek(state).lexeme == "r")
+            {
+                advance(state); // Consume 'r'
+            }
+            else
+            {
+                match(state, TokenType::READ); // Consume 'read'
+            }
 
-      consume(state, TokenType::LPAREN, "Expected '(' after 'r'");
+            consume(state, TokenType::LPAREN, "Expected '(' after 'r'");
 
-      if (!match(state, TokenType::STRING))
-      {
-        throw runtime_error("Line " + to_string(peek(state).line) +
-                            ": Expected string prompt in r statement");
-      }
-      Token prompt = previous(state);
+            if (!match(state, TokenType::STRING))
+            {
+                throw runtime_error("Line " + to_string(peek(state).line) + 
+                                    ", Column " + to_string(peek(state).column) + 
+                                    ": Expected string prompt in r statement");
+            }
+            Token prompt = previous(state);
 
-      consume(state, TokenType::RPAREN, "Expected ')' after prompt");
-      consume(state, TokenType::SEMICOLON, "Expected ';' after r statement");
+            consume(state, TokenType::RPAREN, "Expected ')' after prompt");
+            consume(state, TokenType::SEMICOLON, "Expected ';' after r statement");
 
-      // Create an InputStmt and store it
-      auto inputStmt = make_shared<InputStmt>(name, prompt);
+            // Create an InputStmt and store it
+            auto inputStmt = make_shared<InputStmt>(name, prompt);
 
-      // Return a TypeDeclarationStmt with the InputStmt
-      return make_shared<TypeDeclarationStmt>(type, name, nullptr, inputStmt);
+            // Return a TypeDeclarationStmt with the InputStmt
+            return make_shared<TypeDeclarationStmt>(type, name, nullptr, inputStmt);
+        }
+        else
+        {
+            // Regular initialization
+            initializer = parseExpression(state);
+            consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
+        }
     }
     else
     {
-      // Regular initialization
-      initializer = parseExpression(state);
-      consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
+        consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
     }
-  }
-  else
-  {
-    consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
-  }
 
-  return make_shared<TypeDeclarationStmt>(type, name, initializer);
+    return make_shared<TypeDeclarationStmt>(type, name, initializer);
 }
 
 /**
@@ -558,84 +611,82 @@ StmtPtr parseTypeDeclaration(ParserState &state)
  */
 string createASTString(const StmtPtr &stmt, int indent = 0)
 {
-  string result;
-  string indentation(indent, ' ');
+    string result;
+    string indentation(indent, ' ');
 
-  // Helper lambda to add indented line
-  auto addLine = [&](const string &text)
-  {
-    result += indentation + text + "\n";
-  };
+    // Helper lambda to add indented line
+    auto addLine = [&](const string &text) {
+        result += indentation + text + "\n";
+    };
 
-  // Handle Block Statements
-  if (auto blockStmt = dynamic_pointer_cast<BlockStmt>(stmt))
-  {
-    addLine("BlockStmt");
-    addLine("    " + indentation + "|-- Statements:");
-    for (const auto& statement : blockStmt->statements) {
-        result += createASTString(statement, indent + 8);
-    }
-  }
-  // Handle Assignment Statements
-  else if (auto assignStmt = dynamic_pointer_cast<AssignmentStmt>(stmt))
-  {
-    addLine("AssignmentStmt");
-    addLine("    " + indentation + "|-- Variable: " + assignStmt->name.lexeme);
-    addLine("    " + indentation + "|-- Value: " + assignStmt->value->toString());
-  }
-  // Handle Print Statements
-  else if (auto printStmt = dynamic_pointer_cast<PrintStmt>(stmt))
-  {
-    addLine("PrintStmt");
-    addLine("    " + indentation + "|-- Expression: " + printStmt->expression->toString());
-  }
-  // Handle Input Statements
-  else if (auto inputStmt = dynamic_pointer_cast<InputStmt>(stmt))
-  {
-    addLine("InputStmt");
-    addLine("    " + indentation + "|-- Variable: " + inputStmt->name.lexeme);
-    addLine("    " + indentation + "|-- Prompt: \"" + inputStmt->prompt.lexeme + "\"");
-  }
-  // Handle If Statements
-  else if (auto ifStmt = dynamic_pointer_cast<IfStmt>(stmt))
-  {
-    addLine("IfStmt");
-    addLine("    " + indentation + "|-- Condition: " + ifStmt->condition->toString());
-    addLine("    " + indentation + "|-- Then Branch:");
-    result += createASTString(ifStmt->thenBranch, indent + 8);
-    if (ifStmt->elseBranch)
+    // Handle Block Statements
+    if (auto blockStmt = dynamic_pointer_cast<BlockStmt>(stmt))
     {
-      addLine("    " + indentation + "|-- Else Branch:");
-      result += createASTString(ifStmt->elseBranch, indent + 8);
+        addLine("BlockStmt");
+        for (const auto& statement : blockStmt->statements) {
+            result += createASTString(statement, indent + 4);
+        }
     }
-  }
-  // Handle While Statements
-  else if (auto whileStmt = dynamic_pointer_cast<WhileStmt>(stmt))
-  {
-    addLine("WhileStmt");
-    addLine("    " + indentation + "|-- Condition: " + whileStmt->condition->toString());
-    addLine("    " + indentation + "|-- Body:");
-    result += createASTString(whileStmt->body, indent + 8);
-  }
-  // Handle Type Declaration Statements
-  else if (auto declStmt = dynamic_pointer_cast<TypeDeclarationStmt>(stmt))
-  {
-    addLine("TypeDeclarationStmt");
-    addLine("    " + indentation + "|-- Type: " + declStmt->type.lexeme);
-    addLine("    " + indentation + "|-- Name: " + declStmt->name.lexeme);
-    if (declStmt->inputStmt)
+    // Handle Assignment Statements
+    else if (auto assignStmt = dynamic_pointer_cast<AssignmentStmt>(stmt))
     {
-      auto input = dynamic_pointer_cast<InputStmt>(declStmt->inputStmt);
-      addLine("    " + indentation + "|-- Input:");
-      addLine("        " + indentation + "|-- Prompt: \"" + input->prompt.lexeme + "\"");
+        addLine("AssignmentStmt");
+        addLine("|-- Variable: " + assignStmt->name.lexeme);
+        addLine("|-- Value: " + assignStmt->value->toString());
     }
-    else if (declStmt->initializer)
+    // Handle Print Statements
+    else if (auto printStmt = dynamic_pointer_cast<PrintStmt>(stmt))
     {
-      addLine("    " + indentation + "|-- Initializer: " + declStmt->initializer->toString());
+        addLine("PrintStmt");
+        addLine("|-- Expression: " + printStmt->expression->toString());
     }
-  }
+    // Handle Input Statements
+    else if (auto inputStmt = dynamic_pointer_cast<InputStmt>(stmt))
+    {
+        addLine("InputStmt");
+        addLine("|-- Variable: " + inputStmt->name.lexeme);
+        addLine("|-- Prompt: \"" + inputStmt->prompt.lexeme + "\"");
+    }
+    // Handle If Statements
+    else if (auto ifStmt = dynamic_pointer_cast<IfStmt>(stmt))
+    {
+        addLine("IfStmt");
+        addLine("|-- Condition: " + ifStmt->condition->toString());
+        addLine("|-- Then Branch:");
+        result += createASTString(ifStmt->thenBranch, indent + 4);
+        if (ifStmt->elseBranch)
+        {
+            addLine("|-- Else Branch:");
+            result += createASTString(ifStmt->elseBranch, indent + 4);
+        }
+    }
+    // Handle While Statements
+    else if (auto whileStmt = dynamic_pointer_cast<WhileStmt>(stmt))
+    {
+        addLine("WhileStmt");
+        addLine("|-- Condition: " + whileStmt->condition->toString());
+        addLine("|-- Body:");
+        result += createASTString(whileStmt->body, indent + 4);
+    }
+    // Handle Type Declaration Statements
+    else if (auto declStmt = dynamic_pointer_cast<TypeDeclarationStmt>(stmt))
+    {
+        addLine("TypeDeclarationStmt");
+        addLine("|-- Type: " + declStmt->type.lexeme);
+        addLine("|-- Name: " + declStmt->name.lexeme);
+        if (declStmt->inputStmt)
+        {
+            auto input = dynamic_pointer_cast<InputStmt>(declStmt->inputStmt);
+            addLine("|-- Input:");
+            addLine("    |-- Prompt: \"" + input->prompt.lexeme + "\"");
+        }
+        else if (declStmt->initializer)
+        {
+            addLine("|-- Initializer: " + declStmt->initializer->toString());
+        }
+    }
 
-  return result;
+    return result;
 }
 
 /**
@@ -646,13 +697,13 @@ string createASTString(const StmtPtr &stmt, int indent = 0)
  */
 string createCompleteASTString(const vector<StmtPtr> &statements)
 {
-  string result = "\n=== Abstract Syntax Tree ===\n";
-  result += "Program\n";
-  result += "|-- Statements:\n";
-  
-  for (const auto &statement : statements)
-  {
-    result += createASTString(statement, 8);
-  }
-  return result;
+    string result = "\n=== Abstract Syntax Tree ===\n";
+    result += "Program\n";
+    result += "|-- Statements:\n";
+    
+    for (const auto &statement : statements)
+    {
+        result += createASTString(statement, 4);
+    }
+    return result;
 }

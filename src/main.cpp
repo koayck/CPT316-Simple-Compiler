@@ -70,6 +70,7 @@ int main()
         printTokens(tokens);
 
         // Phase 2: Syntactic Analysis
+        cout << "Syntax Analysis:" << endl;
         vector<StmtPtr> statements = parse(tokens);
         
         // Display AST using the parser's AST creation function

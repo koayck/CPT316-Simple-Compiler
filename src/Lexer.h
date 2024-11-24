@@ -23,7 +23,7 @@ public:
     // explicit keyword is used to prevent implicit conversions
     // e.g. Lexer l = "source code"; is not allowed
     // instead, Lexer l("source code"); is required
-    explicit Lexer(const std::string &source) : source(source), current(0), start(0), line(1) {}
+    explicit Lexer(const std::string &source) : source(source), current(0), start(0), line(1), column(1) {}
 
     // tokenizes the source code and returns a vector of tokens
     std::vector<Token> tokenize();
@@ -33,12 +33,13 @@ private:
     size_t current;     // the current position in the source code
     size_t start;       // the start position of the current token
     int line;           // the current line number
+    int column;         // the current column number
 
     // returns true if the current position is at the end of the source code
     bool isAtEnd() const { return current >= source.length(); }
 
     // returns the current character and advances the position by one
-    char advance() { return source[current++]; }
+    char advance();
 
     // returns the current character without advancing the position
     char peek() const { return isAtEnd() ? '\0' : source[current]; }
@@ -68,4 +69,7 @@ private:
     void skipWhitespace();
 
     bool checkKeyword(int start, const std::string& rest);
+
+    // Add the declaration for getLineStart
+    size_t getLineStart() const;  // Helper function to find start of current line
 };

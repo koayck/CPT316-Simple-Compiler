@@ -78,6 +78,7 @@ struct Token
     double numValue; // Used for INTEGER and DOUBLE tokens
     int line;        // Add line number to Token
     int column;      // Add column position
+    std::string errorMessage;  // New field
 
     // constructor
     // creates a new token with the given type and lexeme
@@ -87,6 +88,10 @@ struct Token
     // creates a new token with the given type, lexeme, and number value
     Token(TokenType t, const std::string &l, double v, int ln, int col)
         : type(t), lexeme(l), numValue(v), line(ln), column(col) {}
+
+    // Add constructor overload for invalid tokens with error messages
+    Token(TokenType type, const std::string& lexeme, int line, int column, const std::string& error = "")
+        : type(type), lexeme(lexeme), numValue(0), line(line), column(column), errorMessage(error) {}
 
     // Add stream operator as a friend function
     friend std::ostream &operator<<(std::ostream &os, const Token &token)

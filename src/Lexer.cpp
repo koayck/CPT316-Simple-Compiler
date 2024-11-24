@@ -1,7 +1,7 @@
 /**
  * @file Lexer.cpp
  * @brief Implementation of the lexical analyzer for MiniLang
- * 
+ *
  * This file implements the lexical analysis phase of the compiler.
  * Key features:
  * 1. Token recognition and creation
@@ -10,7 +10,7 @@
  * 4. String literal parsing
  * 5. Identifier recognition
  * 6. Error handling with line numbers
- * 
+ *
  * The lexer processes the input character by character and groups them into tokens
  * according to the language specification.
  */
@@ -20,6 +20,7 @@
 #include <string>
 #include <iomanip>
 #include <iostream>
+#include <algorithm>
 
 using namespace std;
 
@@ -32,8 +33,7 @@ static const unordered_map<string, TokenType> keywords = {
     {"string", TokenType::TYPE_STRING},
     {"bool", TokenType::TYPE_BOOL},
     {"true", TokenType::BOOLEAN},
-    {"false", TokenType::BOOLEAN}
-};
+    {"false", TokenType::BOOLEAN}};
 
 // tokenizes the source code and returns a vector of tokens
 vector<Token> Lexer::tokenize()
@@ -44,65 +44,100 @@ vector<Token> Lexer::tokenize()
     {
         start = current;
         Token token = scanToken();
-        if (token.type != TokenType::INVALID)
+        if (token.type != TokenType::EOF_TOKEN)
         {
             tokens.push_back(token);
         }
     }
 
-    tokens.push_back(Token(TokenType::EOF_TOKEN, "", line, current + 1));
+    // Add EOF token at column 1
+    tokens.push_back(Token(TokenType::EOF_TOKEN, std::string(""), line, 1, ""));
     return tokens;
 }
 
 Token Lexer::number()
 {
-    bool isDouble = false;
+    int startColumn = column;
 
     while (isDigit(peek()))
+    {
         advance();
+        column++;
+    }
 
-    // Look for a fractional part
+    // Check for invalid decimal point usage
+    if (peek() == '.' && !isDigit(peekNext()))
+    {
+        advance(); // Consume the dot
+        return Token(TokenType::INVALID,
+                     "Invalid decimal point: must be followed by digits",
+                     line, startColumn, "");
+    }
+
     if (peek() == '.' && isDigit(peekNext()))
     {
-        isDouble = true;
-        advance(); // Consume the "."
+        advance();
+        column++;
 
         while (isDigit(peek()))
+        {
             advance();
+            column++;
+        }
+    }
+
+    // Check for invalid characters after number
+    if (isAlpha(peek()))
+    {
+        while (isAlphaNumeric(peek()))
+        {
+            advance();
+        }
+        return Token(TokenType::INVALID,
+                     source.substr(start, current - start),
+                     line, startColumn, "");
     }
 
     std::string numStr = source.substr(start, current - start);
-
-    if (isDouble)
-    {
-        double value = std::stod(numStr);
-        return Token(TokenType::DOUBLE, numStr, value, line, start + 1);
-    }
-    else
-    {
-        int value = std::stoi(numStr);
-        return Token(TokenType::INTEGER, numStr, value, line, start + 1);
-    }
+    return Token(
+        (numStr.find('.') == std::string::npos) ? TokenType::INTEGER : TokenType::DOUBLE,
+        numStr,
+        std::stod(numStr),
+        line,
+        startColumn);
 }
 
 Token Lexer::identifier()
 {
+    int startColumn = column;
+    std::string text;
+
     while (isAlphaNumeric(peek()))
+    {
+        text += peek();
         advance();
-
-    std::string text = source.substr(start, current - start);
-
-    // Check if it's a keyword
-    auto it = keywords.find(text);
-
-    if (it != keywords.end()) {
-        if (text == "true" || text == "false") {
-            return Token(TokenType::BOOLEAN, text, text == "true" ? 1.0 : 0.0, line, start + 1);
-        }
-        return makeToken(it->second);
+        column++;
     }
 
-    return makeToken(TokenType::IDENTIFIER);
+    cout << "Identifier: " << text << endl;
+
+    // Check for invalid identifier patterns
+    if (isDigit(text[0]))
+    {
+        cout << "Invalid identifier: cannot start with a digit" << endl;
+        return Token(TokenType::INVALID, text, line, startColumn, "");
+    }
+
+    // Check for other invalid patterns if needed
+    // For example, check for invalid characters or reserved words
+
+    auto it = keywords.find(text);
+    if (it != keywords.end())
+    {
+        return Token(it->second, text, line, startColumn, "");
+    }
+
+    return Token(TokenType::IDENTIFIER, text, line, startColumn, "");
 }
 
 bool Lexer::match(char expected)
@@ -117,81 +152,130 @@ Token Lexer::scanToken()
 {
     skipWhitespace();
     start = current;
+    int startColumn = column;
 
     if (isAtEnd())
-        return makeToken(TokenType::EOF_TOKEN);
+        return Token(TokenType::EOF_TOKEN, std::string(""), line, startColumn, "");
 
     char c = advance();
+    column++;
 
+    // Handle special cases 'p' and 'r' first
+    if (c == 'p' && peek() == '(') {
+        return Token(TokenType::PRINT, std::string("p"), line, startColumn, "");
+    }
+    if (c == 'r' && peek() == '(') {
+        return Token(TokenType::READ, std::string("r"), line, startColumn, "");
+    }
+
+    // Handle numbers
+    if (isDigit(c)) {
+        current--; // Move back to process the full number
+        column--;
+        Token numToken = number();
+        
+        // Check if the number is immediately followed by letters (invalid identifier)
+        if (isAlpha(peek()) || peek() == '_') {
+            while (!isAtEnd() && (isAlphaNumeric(peek()) || peek() == '_')) {
+                advance();
+                column++;
+            }
+            std::string invalidText = source.substr(start, current - start);
+            return Token(TokenType::INVALID, 
+                        invalidText, 
+                        line, 
+                        startColumn,
+                        "Invalid identifier: cannot start with a number");
+        }
+        return numToken;
+    }
+
+    // Handle identifiers and keywords
+    if (isAlpha(c) || c == '_') {
+        current--; // Move back to process the full identifier
+        column--;
+        
+        std::string identifier;
+        while (!isAtEnd() && (isAlphaNumeric(peek()) || peek() == '_')) {
+            identifier += advance();
+            column++;
+        }
+
+        // Check for keywords
+        auto it = keywords.find(identifier);
+        if (it != keywords.end()) {
+            return Token(it->second, identifier, line, startColumn, "");
+        }
+
+        return Token(TokenType::IDENTIFIER, identifier, line, startColumn, "");
+    }
+
+    // Handle other token types
     switch (c)
     {
     case '(':
-        return makeToken(TokenType::LPAREN);
+        return Token(TokenType::LPAREN, std::string("("), line, startColumn, "");
     case ')':
-        return makeToken(TokenType::RPAREN);
+        return Token(TokenType::RPAREN, std::string(")"), line, startColumn, "");
     case '{':
-        return makeToken(TokenType::LBRACE);
+        return Token(TokenType::LBRACE, std::string("{"), line, startColumn, "");
     case '}':
-        return makeToken(TokenType::RBRACE);
+        return Token(TokenType::RBRACE, std::string("}"), line, startColumn, "");
     case ';':
-        return makeToken(TokenType::SEMICOLON);
+        return Token(TokenType::SEMICOLON, std::string(";"), line, startColumn, "");
     case '+':
-        return makeToken(TokenType::PLUS);
+        return Token(TokenType::PLUS, std::string("+"), line, startColumn, "");
     case '-':
-        return makeToken(TokenType::MINUS);
+        return Token(TokenType::MINUS, std::string("-"), line, startColumn, "");
     case '*':
-        if (match('*'))
-            return makeToken(TokenType::POWER);
-        return makeToken(TokenType::MULTIPLY);
+        if (match('*')) {
+            column++;
+            return Token(TokenType::POWER, std::string("**"), line, startColumn, "");
+        }
+        return Token(TokenType::MULTIPLY, std::string("*"), line, startColumn, "");
     case '/':
-        return makeToken(TokenType::DIVIDE);
+        if (peekNext() == '/') {
+            skipWhitespace();
+            return scanToken();
+        }
+        return Token(TokenType::DIVIDE, std::string("/"), line, startColumn, "");
     case '=':
-        if (match('='))
-            return makeToken(TokenType::EQUAL_EQUAL);
-        return makeToken(TokenType::ASSIGN);
+        if (match('=')) {
+            column++;
+            return Token(TokenType::EQUAL_EQUAL, std::string("=="), line, startColumn, "");
+        }
+        return Token(TokenType::ASSIGN, std::string("="), line, startColumn, "");
     case '<':
-        if (match('='))
-            return makeToken(TokenType::LESS_EQUAL);
-        return makeToken(TokenType::LESS);
+        if (match('=')) {
+            column++;
+            return Token(TokenType::LESS_EQUAL, std::string("<="), line, startColumn, "");
+        }
+        return Token(TokenType::LESS, std::string("<"), line, startColumn, "");
     case '>':
-        if (match('='))
-            return makeToken(TokenType::GREATER_EQUAL);
-        return makeToken(TokenType::GREATER);
+        if (match('=')) {
+            column++;
+            return Token(TokenType::GREATER_EQUAL, std::string(">="), line, startColumn, "");
+        }
+        return Token(TokenType::GREATER, std::string(">"), line, startColumn, "");
     case '!':
-        if (match('='))
-            return makeToken(TokenType::NOT_EQUAL);
-        return makeToken(TokenType::NOT);
-    case '&':
-        if (match('&'))
-            return makeToken(TokenType::AND);
-        break;
-    case '|':
-        if (match('|'))
-            return makeToken(TokenType::OR);
-        break;
+        if (match('=')) {
+            column++;
+            return Token(TokenType::NOT_EQUAL, std::string("!="), line, startColumn, "");
+        }
+        return Token(TokenType::NOT, std::string("!"), line, startColumn, "");
     case '"':
         return string();
-    case 'p':
-        if (peek() == '(')
-            return makeToken(TokenType::PRINT);
-        break;
-    case 'r':
-        if (peek() == '(')
-            return makeToken(TokenType::READ);
-        return identifier();
     }
 
-    if (isDigit(c))
-    {
-        return number();
-    }
-    if (isAlpha(c))
-    {
-        return identifier();
-    }
-
-    return makeToken(TokenType::INVALID);
+    // If we get here, it's an invalid character
+    std::string invalidChar(1, c);
+    return Token(TokenType::INVALID, 
+                invalidChar, 
+                line, 
+                startColumn,
+                "Invalid character in input");
 }
+
 
 void Lexer::skipWhitespace()
 {
@@ -201,17 +285,43 @@ void Lexer::skipWhitespace()
         switch (c)
         {
         case ' ':
+            current++;
+            column++;
+            start = current;
+            break;
         case '\r':
+            current++;
+            start = current;
+            break;
         case '\t':
-            advance();
+            current++;
+            column += 4;
+            start = current;
             break;
         case '\n':
             line++;
-            advance();
+            column = 1;
+            current++;
+            start = current;
             break;
-        case '#':
+        case '#': // Single-line comment
             while (peek() != '\n' && !isAtEnd())
-                advance();
+            {
+                current++;
+            }
+            break;
+        case '/': // Handle C-style single-line comments
+            if (peekNext() == '/')
+            {
+                while (peek() != '\n' && !isAtEnd())
+                {
+                    current++;
+                }
+            }
+            else
+            {
+                return;
+            }
             break;
         default:
             return;
@@ -222,36 +332,45 @@ void Lexer::skipWhitespace()
 Token Lexer::makeToken(TokenType type) const
 {
     std::string text = source.substr(start, current - start);
-    return Token(type, text, line, start + 1);
+    return Token(type, text, line, column - text.length(), "");
 }
 
 Token Lexer::makeToken(TokenType type, double value) const
 {
     std::string text = source.substr(start, current - start);
-    return Token(type, text, value, line, start + 1);
+    return Token(type, text, value, line, column - text.length());
 }
 
 Token Lexer::string()
 {
-    // Skip the opening quote
-    start = current; // Start after the opening quote
+    int startColumn = column - 1;
+    advance(); // Skip the opening quote
+    column++;
 
     while (peek() != '"' && !isAtEnd())
     {
         if (peek() == '\n')
-            line++;
+        {
+            return Token(TokenType::INVALID,
+                         "Unterminated string: string literal must be closed before end of line",
+                         line, startColumn, "");
+        }
         advance();
+        column++;
     }
 
-    if (isAtEnd())
+    if (isAtEnd() || peek() != '"')
     {
-        return makeToken(TokenType::INVALID); // Unterminated string
+        return Token(TokenType::INVALID,
+                     "Unterminated string: missing closing quote",
+                     line, startColumn, "");
     }
 
-    std::string value = source.substr(start, current - start);
+    std::string value = source.substr(start + 1, current - (start + 1));
     advance(); // Skip the closing quote
+    column++;
 
-    return Token(TokenType::STRING, value, line, start + 1);
+    return Token(TokenType::STRING, value, line, startColumn, "");
 }
 
 #include "Token.h"
@@ -337,27 +456,61 @@ string tokenTypeToString(TokenType type)
     }
 }
 
-void printTokens(const vector<Token>& tokens) {
+void printTokens(const vector<Token> &tokens)
+{
     // Print header
     cout << "\nTokenization Results:\n";
     cout << setw(8) << "Line" << setw(8) << "Column" << setw(16) << "Type" << setw(20) << "Value\n";
     cout << string(52, '-') << "\n";
-    
-    // Print each token
-    for (const auto& token : tokens) {
-        cout << setw(8) << token.line 
-             << setw(8) << token.column 
+
+    // print the vector of tokens
+    cout << "Tokens: " << tokens.size() << endl;
+    for (const auto &token : tokens)
+    {
+        cout << tokenTypeToString(token.type) << endl;
+    }
+
+    // Print each token, including INVALID tokens
+    for (const auto &token : tokens)
+    {
+        cout << setw(8) << token.line
+             << setw(8) << token.column
              << setw(16) << tokenTypeToString(token.type);
-             
+
         // Handle value based on token type
-        if (token.type == TokenType::INTEGER || token.type == TokenType::DOUBLE) {
+        if (token.type == TokenType::INTEGER || token.type == TokenType::DOUBLE)
+        {
             cout << setw(20) << token.numValue;
-        } else if (token.type == TokenType::STRING) {
+        }
+        else if (token.type == TokenType::STRING)
+        {
             cout << setw(20) << "\"" + token.lexeme + "\"";
-        } else {
+        }
+        else
+        {
             cout << setw(20) << token.lexeme;
         }
         cout << "\n";
     }
     cout << "\n";
+}
+
+char Lexer::advance()
+{
+    return source[current++];
+}
+
+// Helper function to find start of current line
+size_t Lexer::getLineStart() const
+{
+    size_t pos = start;
+    while (pos > 0)
+    {
+        pos--;
+        if (source[pos] == '\n')
+        {
+            return pos + 1;
+        }
+    }
+    return 0;
 }
