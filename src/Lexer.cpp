@@ -18,6 +18,8 @@
 #include "Lexer.h"
 #include <unordered_map>
 #include <string>
+#include <iomanip>
+#include <iostream>
 
 using namespace std;
 
@@ -48,7 +50,7 @@ vector<Token> Lexer::tokenize()
         }
     }
 
-    tokens.push_back(Token(TokenType::EOF_TOKEN, "", line));
+    tokens.push_back(Token(TokenType::EOF_TOKEN, "", line, current + 1));
     return tokens;
 }
 
@@ -74,12 +76,12 @@ Token Lexer::number()
     if (isDouble)
     {
         double value = std::stod(numStr);
-        return Token(TokenType::DOUBLE, numStr, value, line);
+        return Token(TokenType::DOUBLE, numStr, value, line, start + 1);
     }
     else
     {
         int value = std::stoi(numStr);
-        return Token(TokenType::INTEGER, numStr, value, line);
+        return Token(TokenType::INTEGER, numStr, value, line, start + 1);
     }
 }
 
@@ -95,7 +97,7 @@ Token Lexer::identifier()
 
     if (it != keywords.end()) {
         if (text == "true" || text == "false") {
-            return Token(TokenType::BOOLEAN, text, text == "true" ? 1.0 : 0.0, line);
+            return Token(TokenType::BOOLEAN, text, text == "true" ? 1.0 : 0.0, line, start + 1);
         }
         return makeToken(it->second);
     }
@@ -220,13 +222,13 @@ void Lexer::skipWhitespace()
 Token Lexer::makeToken(TokenType type) const
 {
     std::string text = source.substr(start, current - start);
-    return Token(type, text, line);
+    return Token(type, text, line, start + 1);
 }
 
 Token Lexer::makeToken(TokenType type, double value) const
 {
     std::string text = source.substr(start, current - start);
-    return Token(type, text, value, line);
+    return Token(type, text, value, line, start + 1);
 }
 
 Token Lexer::string()
@@ -249,7 +251,7 @@ Token Lexer::string()
     std::string value = source.substr(start, current - start);
     advance(); // Skip the closing quote
 
-    return Token(TokenType::STRING, value, line);
+    return Token(TokenType::STRING, value, line, start + 1);
 }
 
 #include "Token.h"
@@ -333,4 +335,29 @@ string tokenTypeToString(TokenType type)
     default:
         return "UNKNOWN"; // Fallback for any unrecognized type
     }
+}
+
+void printTokens(const vector<Token>& tokens) {
+    // Print header
+    cout << "\nTokenization Results:\n";
+    cout << setw(8) << "Line" << setw(8) << "Column" << setw(16) << "Type" << setw(20) << "Value\n";
+    cout << string(52, '-') << "\n";
+    
+    // Print each token
+    for (const auto& token : tokens) {
+        cout << setw(8) << token.line 
+             << setw(8) << token.column 
+             << setw(16) << tokenTypeToString(token.type);
+             
+        // Handle value based on token type
+        if (token.type == TokenType::INTEGER || token.type == TokenType::DOUBLE) {
+            cout << setw(20) << token.numValue;
+        } else if (token.type == TokenType::STRING) {
+            cout << setw(20) << "\"" + token.lexeme + "\"";
+        } else {
+            cout << setw(20) << token.lexeme;
+        }
+        cout << "\n";
+    }
+    cout << "\n";
 }

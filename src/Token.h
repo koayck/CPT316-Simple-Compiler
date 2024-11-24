@@ -77,22 +77,23 @@ struct Token
     std::string lexeme;
     double numValue; // Used for INTEGER and DOUBLE tokens
     int line;        // Add line number to Token
+    int column;      // Add column position
 
     // constructor
     // creates a new token with the given type and lexeme
-    Token(TokenType t, const std::string &l, int ln)
-        : type(t), lexeme(l), numValue(0.0), line(ln) {}
+    Token(TokenType t, const std::string &l, int ln, int col)
+        : type(t), lexeme(l), numValue(0.0), line(ln), column(col) {}
 
     // creates a new token with the given type, lexeme, and number value
-    Token(TokenType t, const std::string &l, double v, int ln)
-        : type(t), lexeme(l), numValue(v), line(ln) {}
+    Token(TokenType t, const std::string &l, double v, int ln, int col)
+        : type(t), lexeme(l), numValue(v), line(ln), column(col) {}
 
     // Add stream operator as a friend function
     friend std::ostream &operator<<(std::ostream &os, const Token &token)
     {
         os << "Token{type=" << tokenTypeToString(token.type)
            << ", lexeme='" << token.lexeme
-           << "', line=" << token.line << "}";
+           << "', line=" << token.line << ", column=" << token.column << "}";
         return os;
     }
 };
