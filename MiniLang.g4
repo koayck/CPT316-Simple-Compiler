@@ -4,50 +4,81 @@ grammar MiniLang;
 // Define the main parser rules
 program : statement+ EOF;
 
-statement : typeDeclaration | assignment | output | input | ifStatement | whileLoop | COMMENT;
+statement 
+    : ifStatement 
+    | whileLoop 
+    | printStmt 
+    | typeDeclaration 
+    | assignment 
+    | inputStmt 
+    | block
+    ;
 
-typeDeclaration : type IDENTIFIER ('=' (expression | input))? ';';
+block : '{' statement* '}';
 
-type : 'int' | 'double' | 'string' | 'bool';
+typeDeclaration 
+    : type IDENTIFIER ('=' (expression | inputStmt))? ';'
+    ;
 
-assignment : IDENTIFIER '=' expression ';';
+type : TYPE_INT | TYPE_DOUBLE | TYPE_STRING | TYPE_BOOL;
 
-output : 'p' '(' expression ')' ';';
+assignment : IDENTIFIER '=' (expression | inputStmt) ';';
 
-input : IDENTIFIER '=' 'r' '(' STRING ')' ';' | type IDENTIFIERp '=' 'r' '(' STRING ')' ';';
+printStmt : 'p' '(' expression ')' ';';
 
-ifStatement : 'if' '(' condition ')' statement ('else' statement)?;
+inputStmt : 'r' '(' STRING ')' ';';
 
-whileLoop : 'while' '(' condition ')' statement;
+ifStatement 
+    : 'if' '(' comparison ')' (statement | block) 
+      ('else' (statement | block))?
+    ;
 
-// Expressions
-expression : term (('+' | '-') term)*;
+whileLoop 
+    : 'while' '(' comparison ')' (statement | block)
+    ;
 
-term : factor (('*' | '/') factor)*;
+// Expressions with precedence
+expression 
+    : term ((PLUS | MINUS) term)*
+    ;
 
-factor : primary | '(' expression ')';
+term 
+    : factor ((MULTIPLY | DIVIDE) factor)*
+    ;
 
-primary : IDENTIFIER | INTEGER | DOUBLE | STRING | BOOLEAN;
+factor 
+    : primary 
+    | LPAREN expression RPAREN
+    ;
+
+primary 
+    : IDENTIFIER 
+    | INTEGER 
+    | DOUBLE 
+    | STRING 
+    | BOOLEAN
+    ;
 
 // Conditions
-condition : expression relop expression | '!' condition | condition '&&' condition | condition '||' condition;
+comparison 
+    : expression relop expression
+    | NOT comparison
+    | comparison AND comparison
+    | comparison OR comparison
+    ;
 
-relop : '>' | '<' | '>=' | '<=' | '==' | '!=';
+relop 
+    : '>' | '<' | '>=' | '<=' | '==' | '!='
+    ;
 
-// Define lexer rules
-IDENTIFIER : [a-zA-Z_] [a-zA-Z_0-9]*;
+// Lexer rules
+IDENTIFIER : [a-zA-Z_][a-zA-Z0-9_]*;
 INTEGER : [0-9]+;
 DOUBLE : [0-9]+ '.' [0-9]+;
-STRING : '"' (~["])* '"';
+STRING : '"' (~["\r\n])* '"';
 BOOLEAN : 'true' | 'false';
 
-COMMENT : '#' ~[\r\n]* -> skip;
-WS : [ \t\r\n]+ -> skip;
-
 // Keywords
-IF : 'if';
-ELSE : 'else';
-WHILE : 'while';
 TYPE_INT : 'int';
 TYPE_DOUBLE : 'double';
 TYPE_STRING : 'string';
@@ -58,13 +89,18 @@ PLUS : '+';
 MINUS : '-';
 MULTIPLY : '*';
 DIVIDE : '/';
+POWER : '**';
 ASSIGN : '=';
-EQUAL : '==';
-NOT_EQUAL : '!=';
+
+// Comparison operators
 GREATER : '>';
 LESS : '<';
 GREATER_EQUAL : '>=';
 LESS_EQUAL : '<=';
+EQUAL_EQUAL : '==';
+NOT_EQUAL : '!=';
+
+// Logical operators
 AND : '&&';
 OR : '||';
 NOT : '!';
@@ -75,3 +111,6 @@ RPAREN : ')';
 LBRACE : '{';
 RBRACE : '}';
 SEMICOLON : ';';
+
+// Skip whitespace and comments
+WS : [ \t\r\n]+ -> skip;
