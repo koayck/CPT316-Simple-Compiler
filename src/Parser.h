@@ -170,3 +170,8 @@ ExprPtr parsePower(ParserState &state);
  * Highest precedence level
  */
 ExprPtr parsePrimary(ParserState &state);
+
+/**
+ * @brief Creates an error message with line content and pointer
+ */
+string createErrorMessage(const ParserState &state, const std::string &message);
