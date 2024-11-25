@@ -16,33 +16,6 @@
 
 using namespace std;
 
-// Add this helper function at the top of Parser.cpp
-string createErrorMessage(const ParserState &state, const string &message) {
-    Token currentToken = peek(state);
-    int line = currentToken.line;
-    int column = currentToken.column;
-    
-    // Find the line content
-    string lineContent;
-    int currentLine = 1;
-    size_t pos = 0;
-    while (pos < state.tokens[0].lexeme.length() && currentLine < line) {
-        if (state.tokens[0].lexeme[pos] == '\n') currentLine++;
-        pos++;
-    }
-    size_t lineStart = pos;
-    while (pos < state.tokens[0].lexeme.length() && state.tokens[0].lexeme[pos] != '\n') {
-        lineContent += state.tokens[0].lexeme[pos++];
-    }
-
-    // Create the error message with line content and pointer
-    string errorMsg = "Line " + to_string(line) + ", Column " + to_string(column) + ": " + message + "\n";
-    errorMsg += lineContent + "\n";
-    errorMsg += string(column - 1, ' ') + "^";
-    
-    return errorMsg;
-}
-
 /**
  * @brief Main parsing function that processes all tokens into statements
  *
@@ -706,4 +679,31 @@ string createCompleteASTString(const vector<StmtPtr> &statements)
         result += createASTString(statement, 4);
     }
     return result;
+}
+
+// Add this helper function at the top of Parser.cpp
+string createErrorMessage(const ParserState &state, const string &message) {
+    Token currentToken = peek(state);
+    int line = currentToken.line;
+    int column = currentToken.column;
+    
+    // Find the line content
+    string lineContent;
+    int currentLine = 1;
+    size_t pos = 0;
+    while (pos < state.tokens[0].lexeme.length() && currentLine < line) {
+        if (state.tokens[0].lexeme[pos] == '\n') currentLine++;
+        pos++;
+    }
+    size_t lineStart = pos;
+    while (pos < state.tokens[0].lexeme.length() && state.tokens[0].lexeme[pos] != '\n') {
+        lineContent += state.tokens[0].lexeme[pos++];
+    }
+
+    // Create the error message with line content and pointer
+    string errorMsg = "Line " + to_string(line) + ", Column " + to_string(column) + ": " + message + "\n";
+    errorMsg += lineContent + "\n";
+    errorMsg += string(column - 1, ' ') + "^";
+    
+    return errorMsg;
 }

@@ -119,12 +119,9 @@ Token Lexer::identifier()
         column++;
     }
 
-    cout << "Identifier: " << text << endl;
-
     // Check for invalid identifier patterns
     if (isDigit(text[0]))
     {
-        cout << "Invalid identifier: cannot start with a digit" << endl;
         return Token(TokenType::INVALID, text, line, startColumn, "");
     }
 
@@ -304,25 +301,6 @@ void Lexer::skipWhitespace()
             current++;
             start = current;
             break;
-        case '#': // Single-line comment
-            while (peek() != '\n' && !isAtEnd())
-            {
-                current++;
-            }
-            break;
-        case '/': // Handle C-style single-line comments
-            if (peekNext() == '/')
-            {
-                while (peek() != '\n' && !isAtEnd())
-                {
-                    current++;
-                }
-            }
-            else
-            {
-                return;
-            }
-            break;
         default:
             return;
         }
@@ -462,13 +440,6 @@ void printTokens(const vector<Token> &tokens)
     cout << "\nTokenization Results:\n";
     cout << setw(8) << "Line" << setw(8) << "Column" << setw(16) << "Type" << setw(20) << "Value\n";
     cout << string(52, '-') << "\n";
-
-    // print the vector of tokens
-    cout << "Tokens: " << tokens.size() << endl;
-    for (const auto &token : tokens)
-    {
-        cout << tokenTypeToString(token.type) << endl;
-    }
 
     // Print each token, including INVALID tokens
     for (const auto &token : tokens)
