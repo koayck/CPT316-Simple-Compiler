@@ -466,11 +466,6 @@ void printTokens(const vector<Token> &tokens)
     cout << "\n";
 }
 
-char Lexer::advance()
-{
-    return source[current++];
-}
-
 // Helper function to find start of current line
 size_t Lexer::getLineStart() const
 {
