@@ -65,7 +65,11 @@ public:
 
     std::string toString() const override
     {
-        return "(" + left->toString() + " " + op.lexeme + " " + right->toString() + ")";
+        return "BinaryExpression (" + op.lexeme + ")\n"
+               "|-- LeftOperand\n"
+               "|   " + left->toString() + "\n"
+               "|-- RightOperand\n"
+               "    " + right->toString();
     }
 };
 
@@ -80,9 +84,9 @@ public:
     {
         if (value.type == TokenType::BOOLEAN)
         {
-            return value.numValue != 0 ? "true" : "false";
+            return "Literal: " + std::string(value.numValue != 0 ? "true" : "false");
         }
-        return value.lexeme;
+        return "Literal: " + value.lexeme;
     }
 };
 
@@ -95,7 +99,7 @@ public:
 
     std::string toString() const override
     {
-        return name.lexeme;
+        return "Variable: " + name.lexeme;
     }
 };
 
@@ -110,7 +114,9 @@ public:
 
     std::string toString() const override
     {
-        return "(" + op.lexeme + right->toString() + ")";
+        return "UnaryExpression (" + op.lexeme + ")\n"
+               "|-- Operand\n"
+               "    " + right->toString();
     }
 };
 
@@ -126,11 +132,11 @@ public:
 
     std::string toString() const override
     {
-        return "AssignmentStmt\n"
-               "|-- Variable: " +
-               name.lexeme + "\n"
-                             "|-- Value: " +
-               value->toString() + "\n";
+        return "AssignmentStatement\n"
+               "|-- Identifier\n"
+               "|   " + name.lexeme + "\n"
+               "|-- Expression\n"
+               "    " + value->toString();
     }
 };
 
@@ -145,11 +151,11 @@ public:
 
     std::string toString() const override
     {
-        return "InputStmt\n"
-               "|-- Variable: " +
-               name.lexeme + "\n"
-                             "|-- Prompt: \"" +
-               prompt.lexeme + "\"\n";
+        return "ReadStatement\n"
+               "|-- Identifier\n"
+               "|   " + name.lexeme + "\n"
+               "|-- PromptString\n"
+               "    \"" + prompt.lexeme + "\"";
     }
 };
 
@@ -166,22 +172,29 @@ public:
 
     std::string toString() const override
     {
-        std::string result = "TypeDeclarationStmt\n"
-                             "|-- Type: " +
-                             type.lexeme + "\n"
-                                           "|-- Name: " +
-                             name.lexeme + "\n";
-
-        if (inputStmt)
+        std::string result = "VariableDeclaration\n"
+                            "|-- DataType\n"
+                            "|   " + type.lexeme + "\n"
+                            "|-- Identifier\n";
+        
+        if (inputStmt || initializer)
         {
-            auto input = dynamic_pointer_cast<InputStmt>(inputStmt);
-            result += "|-- Input:\n"
-                      "    |-- Prompt: \"" +
-                      input->prompt.lexeme + "\"\n";
+            result += "|   " + name.lexeme;
+            if (inputStmt)
+            {
+                auto input = dynamic_pointer_cast<InputStmt>(inputStmt);
+                result += "\n|-- Initializer (Read)\n"
+                         "    PromptString: \"" + input->prompt.lexeme + "\"";
+            }
+            else if (initializer)
+            {
+                result += "\n|-- InitializerExpression\n"
+                         "    " + initializer->toString();
+            }
         }
-        else if (initializer)
+        else
         {
-            result += "|-- Initializer: " + initializer->toString() + "\n";
+            result += "    " + name.lexeme;
         }
         return result;
     }
@@ -196,9 +209,9 @@ public:
 
     std::string toString() const override
     {
-        return "PrintStmt\n"
-               "|-- Expression: " +
-               expression->toString() + "\n";
+        return "PrintStatement\n"
+               "|-- Expression\n"
+               "    " + expression->toString();
     }
 };
 
@@ -211,19 +224,29 @@ public:
 
     std::string toString() const override
     {
-        std::string result = "BlockStmt\n";
-        for (const auto &stmt : statements)
+        std::string result = "CompoundStatement\n";
+        for (size_t i = 0; i < statements.size(); i++)
         {
-            // Indent each statement in the block
-            std::string stmtStr = stmt->toString();
-            // Add 4 spaces to each line of the statement
-            size_t pos = 0;
-            while ((pos = stmtStr.find('\n', pos)) != std::string::npos)
-            {
-                stmtStr.insert(pos + 1, "    ");
-                pos += 5;
+            std::string stmtStr = statements[i]->toString();
+            if (i < statements.size() - 1) {
+                result += "|-- Statement[" + std::to_string(i+1) + "]\n";
+                size_t pos = 0;
+                while ((pos = stmtStr.find('\n', pos)) != std::string::npos)
+                {
+                    stmtStr.insert(pos + 1, "|   ");
+                    pos += 5;
+                }
+                result += "|   " + stmtStr + "\n";
+            } else {
+                result += "|-- Statement[" + std::to_string(i+1) + "]\n";
+                size_t pos = 0;
+                while ((pos = stmtStr.find('\n', pos)) != std::string::npos)
+                {
+                    stmtStr.insert(pos + 1, "    ");
+                    pos += 5;
+                }
+                result += "    " + stmtStr + "\n";
             }
-            result += "    " + stmtStr;
         }
         return result;
     }
@@ -241,33 +264,20 @@ public:
 
     std::string toString() const override
     {
-        std::string result = "IfStmt\n"
-                             "|-- Condition: " +
-                             condition->toString() + "\n"
-                                                     "|-- Then Branch:\n";
-
-        // Add then branch with indentation
-        std::string thenStr = thenBranch->toString();
-        size_t pos = 0;
-        while ((pos = thenStr.find('\n', pos)) != std::string::npos)
-        {
-            thenStr.insert(pos + 1, "    ");
-            pos += 5;
-        }
-        result += "    " + thenStr;
-
-        // Add else branch if it exists
+        std::string result = "ConditionalStatement\n"
+                            "|-- Condition\n"
+                            "|   " + condition->toString() + "\n"
+                            "|-- ThenBranch\n";
+        
         if (elseBranch)
         {
-            result += "|-- Else Branch:\n";
-            std::string elseStr = elseBranch->toString();
-            pos = 0;
-            while ((pos = elseStr.find('\n', pos)) != std::string::npos)
-            {
-                elseStr.insert(pos + 1, "    ");
-                pos += 5;
-            }
-            result += "    " + elseStr;
+            result += "|   " + thenBranch->toString() + "\n"
+                     "|-- ElseBranch\n"
+                     "    " + elseBranch->toString();
+        }
+        else
+        {
+            result += "    " + thenBranch->toString();
         }
         return result;
     }
@@ -284,20 +294,10 @@ public:
 
     std::string toString() const override
     {
-        std::string result = "WhileStmt\n"
-                             "|-- Condition: " +
-                             condition->toString() + "\n"
-                                                     "|-- Body:\n";
-
-        // Add body with indentation
-        std::string bodyStr = body->toString();
-        size_t pos = 0;
-        while ((pos = bodyStr.find('\n', pos)) != std::string::npos)
-        {
-            bodyStr.insert(pos + 1, "    ");
-            pos += 5;
-        }
-        result += "    " + bodyStr;
-        return result;
+        return "WhileStatement\n"
+               "|-- Condition\n"
+               "|   " + condition->toString() + "\n"
+               "|-- Body\n"
+               "    " + body->toString();
     }
 };
