@@ -58,25 +58,19 @@ vector<Token> Lexer::tokenize()
 Token Lexer::number()
 {
     int startColumn = column;
+    size_t numberStart = current;
 
+    // Parse the integer part
     while (isDigit(peek()))
     {
         advance();
         column++;
     }
 
-    // Check for invalid decimal point usage
-    if (peek() == '.' && !isDigit(peekNext()))
-    {
-        advance(); // Consume the dot
-        return Token(TokenType::INVALID,
-                     "Invalid decimal point: must be followed by digits",
-                     line, startColumn, "");
-    }
-
+    // Parse the decimal part if present
     if (peek() == '.' && isDigit(peekNext()))
     {
-        advance();
+        advance(); // consume the dot
         column++;
 
         while (isDigit(peek()))
@@ -86,25 +80,35 @@ Token Lexer::number()
         }
     }
 
-    // Check for invalid characters after number
-    if (isAlpha(peek()))
+    // Get the number string and check if we're at an operator
+    std::string numStr = source.substr(numberStart, current - numberStart);
+    
+    // Don't consume operators or other non-number characters
+    if (peek() == '+' || peek() == '-' || peek() == '*' || peek() == '/' || 
+        peek() == '(' || peek() == ')' || peek() == ';' || peek() == ' ' ||
+        peek() == '\n' || peek() == '\t' || peek() == '\r' || isAtEnd())
     {
-        while (isAlphaNumeric(peek()))
-        {
-            advance();
-        }
-        return Token(TokenType::INVALID,
-                     source.substr(start, current - start),
-                     line, startColumn, "");
+        return Token(
+            (numStr.find('.') == std::string::npos) ? TokenType::INTEGER : TokenType::DOUBLE,
+            numStr,
+            std::stod(numStr),
+            line,
+            startColumn);
     }
 
-    std::string numStr = source.substr(start, current - start);
-    return Token(
-        (numStr.find('.') == std::string::npos) ? TokenType::INTEGER : TokenType::DOUBLE,
-        numStr,
-        std::stod(numStr),
-        line,
-        startColumn);
+    // If we get here, we have invalid characters after the number
+    while (!isAtEnd() && !isspace(peek()) && peek() != ';' && 
+           peek() != '+' && peek() != '-' && peek() != '*' && peek() != '/')
+    {
+        advance();
+        column++;
+    }
+    
+    return Token(TokenType::INVALID,
+                source.substr(numberStart, current - numberStart),
+                line,
+                startColumn,
+                "Invalid number format");
 }
 
 Token Lexer::identifier()
@@ -169,43 +173,6 @@ Token Lexer::scanToken()
     if (isDigit(c)) {
         current--; // Move back to process the full number
         column--;
-        
-        // Look ahead to see if this might be an invalid identifier
-        bool hasInvalidChar = false;
-        bool hasLetterOrUnderscore = false;
-        size_t lookAhead = current;
-        std::string invalidText;
-        
-        while (lookAhead < source.length() && 
-               !isspace(source[lookAhead]) && source[lookAhead] != ';' && 
-               source[lookAhead] != '=' && source[lookAhead] != '(' && 
-               source[lookAhead] != ')' && source[lookAhead] != '{' && 
-               source[lookAhead] != '}') {
-            char ch = source[lookAhead];
-            if (isAlpha(ch) || ch == '_') {
-                hasLetterOrUnderscore = true;
-            }
-            if (!isAlphaNumeric(ch) && ch != '_') {
-                hasInvalidChar = true;
-            }
-            lookAhead++;
-        }
-        
-        // If it's a potential invalid identifier (has letters/underscore)
-        if (hasLetterOrUnderscore || hasInvalidChar) {
-            // Consume the entire invalid token
-            while (current < lookAhead) {
-                invalidText += advance();
-                column++;
-            }
-            return Token(TokenType::INVALID, 
-                        invalidText, 
-                        line, 
-                        startColumn,
-                        "Invalid identifier: cannot start with a number and contains invalid characters");
-        }
-        
-        // Otherwise, process as a normal number
         return number();
     }
 
@@ -213,178 +180,53 @@ Token Lexer::scanToken()
     if (isAlpha(c) || c == '_') {
         current--; // Move back to process the full identifier
         column--;
-        
-        // Look ahead to see if this contains invalid characters
-        bool hasInvalidChar = false;
-        size_t lookAhead = current;
-        std::string identifier;
-        
-        while (lookAhead < source.length() && 
-               !isspace(source[lookAhead]) && source[lookAhead] != ';' && 
-               source[lookAhead] != '=' && source[lookAhead] != '(' && 
-               source[lookAhead] != ')' && source[lookAhead] != '{' && 
-               source[lookAhead] != '}') {
-            char ch = source[lookAhead];
-            if (!isAlphaNumeric(ch) && ch != '_') {
-                hasInvalidChar = true;
+        return identifier();
+    }
+
+    // Handle operators and other single/double character tokens
+    switch (c) {
+        case '(': return Token(TokenType::LPAREN, "(", line, startColumn, "");
+        case ')': return Token(TokenType::RPAREN, ")", line, startColumn, "");
+        case '{': return Token(TokenType::LBRACE, "{", line, startColumn, "");
+        case '}': return Token(TokenType::RBRACE, "}", line, startColumn, "");
+        case ';': return Token(TokenType::SEMICOLON, ";", line, startColumn, "");
+        case '+': return Token(TokenType::PLUS, "+", line, startColumn, "");
+        case '-': return Token(TokenType::MINUS, "-", line, startColumn, "");
+        case '*': 
+            if (match('*')) {
+                column++;
+                return Token(TokenType::POWER, "**", line, startColumn, "");
             }
-            lookAhead++;
-        }
-        
-        // Consume the entire token
-        while (current < lookAhead) {
-            identifier += advance();
-            column++;
-        }
-        
-        // If it contains invalid characters, return as invalid token
-        if (hasInvalidChar) {
-            return Token(TokenType::INVALID, 
-                        identifier, 
-                        line, 
-                        startColumn,
-                        "Invalid identifier: contains invalid characters");
-        }
-        
-        // Check for keywords
-        auto it = keywords.find(identifier);
-        if (it != keywords.end()) {
-            return Token(it->second, identifier, line, startColumn, "");
-        }
-        
-        return Token(TokenType::IDENTIFIER, identifier, line, startColumn, "");
-    }
-    
-
-    // Check for potential invalid identifiers starting with invalid symbols
-    if (!isspace(c) && c != ';' && c != '=' && c != '(' && c != ')' && 
-        c != '{' && c != '}' && c != '+' && c != '-' && c != '*' && 
-        c != '/' && c != '<' && c != '>' && c != '!' && c != '"') {
-        
-        current--; // Move back to include the invalid symbol
-        column--;
-        
-        // First check if it's a valid operator
-        char currentChar = source[current];
-        char nextChar = peekNext();
-        
-        // Check for valid double-character operators
-        if ((currentChar == '&' && nextChar == '&') ||
-            (currentChar == '|' && nextChar == '|') ||
-            (currentChar == '*' && nextChar == '*')) {
-            // Move back to original position and let the switch handle it
-            current++;
-            column++;
-            c = currentChar; // Restore the current character
-            
-            // Handle the operators directly here
-            switch (c) {
-                case '&':
-                    if (match('&')) {
-                        column++;
-                        return Token(TokenType::AND, std::string("&&"), line, startColumn, "");
-                    }
-                    break;
-                case '|':
-                    if (match('|')) {
-                        column++;
-                        return Token(TokenType::OR, std::string("||"), line, startColumn, "");
-                    }
-                    break;
-                case '*':
-                    if (match('*')) {
-                        column++;
-                        return Token(TokenType::POWER, std::string("**"), line, startColumn, "");
-                    }
-                    break;
+            return Token(TokenType::MULTIPLY, "*", line, startColumn, "");
+        case '/': return Token(TokenType::DIVIDE, "/", line, startColumn, "");
+        case '=':
+            if (match('=')) {
+                column++;
+                return Token(TokenType::EQUAL_EQUAL, "==", line, startColumn, "");
             }
-        }
-
-        // Look ahead to see if this is part of an identifier or just invalid characters
-        size_t lookAhead = current;
-        std::string invalidText;
-        
-        // Collect all consecutive invalid/special characters
-        while (lookAhead < source.length() && 
-               !isspace(source[lookAhead]) && source[lookAhead] != ';' && 
-               source[lookAhead] != '=' && source[lookAhead] != '(' && 
-               source[lookAhead] != ')' && source[lookAhead] != '{' && 
-               source[lookAhead] != '}' && 
-               !isAlphaNumeric(source[lookAhead]) && source[lookAhead] != '_') {
-            lookAhead++;
-        }
-        
-        // Consume the invalid characters
-        while (current < lookAhead) {
-            invalidText += advance();
-            column++;
-        }
-        
-        return Token(TokenType::INVALID, 
-                    invalidText, 
-                    line, 
-                    startColumn,
-                    "Invalid character sequence: '" + invalidText + "'");
+            return Token(TokenType::ASSIGN, "=", line, startColumn, "");
+        case '<':
+            if (match('=')) {
+                column++;
+                return Token(TokenType::LESS_EQUAL, "<=", line, startColumn, "");
+            }
+            return Token(TokenType::LESS, "<", line, startColumn, "");
+        case '>':
+            if (match('=')) {
+                column++;
+                return Token(TokenType::GREATER_EQUAL, ">=", line, startColumn, "");
+            }
+            return Token(TokenType::GREATER, ">", line, startColumn, "");
+        case '!':
+            if (match('=')) {
+                column++;
+                return Token(TokenType::NOT_EQUAL, "!=", line, startColumn, "");
+            }
+            return Token(TokenType::NOT, "!", line, startColumn, "");
+        case '"': return string();
     }
 
-    // Handle other token types
-    switch (c)
-    {
-    case '(':
-        return Token(TokenType::LPAREN, std::string("("), line, startColumn, "");
-    case ')':
-        return Token(TokenType::RPAREN, std::string(")"), line, startColumn, "");
-    case '{':
-        return Token(TokenType::LBRACE, std::string("{"), line, startColumn, "");
-    case '}':
-        return Token(TokenType::RBRACE, std::string("}"), line, startColumn, "");
-    case ';':
-        return Token(TokenType::SEMICOLON, std::string(";"), line, startColumn, "");
-    case '+':
-        return Token(TokenType::PLUS, std::string("+"), line, startColumn, "");
-    case '-':
-        return Token(TokenType::MINUS, std::string("-"), line, startColumn, "");
-    case '*':
-        if (match('*')) {
-            column++;
-            return Token(TokenType::POWER, std::string("**"), line, startColumn, "");
-        }
-        return Token(TokenType::MULTIPLY, std::string("*"), line, startColumn, "");
-    case '/':
-        if (peekNext() == '/') {
-            skipWhitespace();
-            return scanToken();
-        }
-        return Token(TokenType::DIVIDE, std::string("/"), line, startColumn, "");
-    case '=':
-        if (match('=')) {
-            column++;
-            return Token(TokenType::EQUAL_EQUAL, std::string("=="), line, startColumn, "");
-        }
-        return Token(TokenType::ASSIGN, std::string("="), line, startColumn, "");
-    case '<':
-        if (match('=')) {
-            column++;
-            return Token(TokenType::LESS_EQUAL, std::string("<="), line, startColumn, "");
-        }
-        return Token(TokenType::LESS, std::string("<"), line, startColumn, "");
-    case '>':
-        if (match('=')) {
-            column++;
-            return Token(TokenType::GREATER_EQUAL, std::string(">="), line, startColumn, "");
-        }
-        return Token(TokenType::GREATER, std::string(">"), line, startColumn, "");
-    case '!':
-        if (match('=')) {
-            column++;
-            return Token(TokenType::NOT_EQUAL, std::string("!="), line, startColumn, "");
-        }
-        return Token(TokenType::NOT, std::string("!"), line, startColumn, "");
-    case '"':
-        return string();
-    }
-
-    // If we get here, it's an invalid character
+    // If we get here, we encountered an invalid character
     std::string invalidChar(1, c);
     return Token(TokenType::INVALID, 
                 invalidChar, 
