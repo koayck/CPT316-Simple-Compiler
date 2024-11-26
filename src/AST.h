@@ -52,6 +52,19 @@ public:
     virtual std::string toString() const = 0;
 };
 
+// Helper function for indentation
+static string indent(const string& str, const string& prefix) {
+    string result;
+    istringstream stream(str);
+    string line;
+    while (getline(stream, line)) {
+        if (!line.empty()) {
+            result += prefix + line + "\n";
+        }
+    }
+    return result;
+}
+
 // Expression nodes
 class BinaryExpr : public Expression
 {
@@ -65,28 +78,12 @@ public:
 
     std::string toString() const override
     {
-        // Helper function to indent each line of a string
-        auto indentString = [](const std::string& str, const std::string& indent) {
-            std::string result;
-            size_t pos = 0, lastPos = 0;
-            while ((pos = str.find('\n', lastPos)) != std::string::npos) {
-                result += indent + str.substr(lastPos, pos - lastPos + 1);
-                lastPos = pos + 1;
-            }
-            if (lastPos < str.length()) {
-                result += indent + str.substr(lastPos);
-            }
-            return result;
-        };
-
-        std::string leftStr = left->toString();
-        std::string rightStr = right->toString();
-
-        return "BinaryExpression (" + op.lexeme + ")\n"
-               "|-- LeftOperand\n"
-               "|   " + indentString(leftStr, "|   ").substr(4) + "\n"
-               "|-- RightOperand\n"
-               "    " + indentString(rightStr, "    ").substr(4);
+        std::string result = "BinaryExpression (" + op.lexeme + ")\n";
+        result += "|-- LeftOperand\n";
+        result += "|   " + left->toString() + "\n";
+        result += "|-- RightOperand\n";
+        result += "    " + right->toString();
+        return result;
     }
 };
 
@@ -149,27 +146,11 @@ public:
 
     std::string toString() const override
     {
-        // Helper function to indent each line of a string
-        auto indentString = [](const std::string& str, const std::string& indent) {
-            std::string result;
-            size_t pos = 0, lastPos = 0;
-            while ((pos = str.find('\n', lastPos)) != std::string::npos) {
-                result += indent + str.substr(lastPos, pos - lastPos + 1);
-                lastPos = pos + 1;
-            }
-            if (lastPos < str.length()) {
-                result += indent + str.substr(lastPos);
-            }
-            return result;
-        };
-
-        std::string exprStr = value->toString();
-        
-        return "AssignmentStatement\n"
-               "|-- Identifier\n"
-               "|   " + name.lexeme + "\n"
-               "|-- Expression\n"
-               "    " + indentString(exprStr, "    ").substr(4);
+        std::string result = "AssignmentStatement\n";
+        result += "|-- Identifier: " + name.lexeme + "\n";
+        result += "|-- Expression\n";
+        result += "    " + indent(value->toString(), "    ");
+        return result;
     }
 };
 
@@ -205,29 +186,18 @@ public:
 
     std::string toString() const override
     {
-        std::string result = "VariableDeclaration\n"
-                            "|-- DataType\n"
-                            "|   " + type.lexeme + "\n"
-                            "|-- Identifier\n";
+        std::string result = "VariableDeclaration\n";
+        result += "|-- Type: " + type.lexeme + "\n";
+        result += "|-- Name: " + name.lexeme;
         
-        if (inputStmt || initializer)
-        {
-            result += "|   " + name.lexeme;
-            if (inputStmt)
-            {
-                auto input = dynamic_pointer_cast<InputStmt>(inputStmt);
-                result += "\n|-- Initializer (Read)\n"
-                         "    PromptString: \"" + input->prompt.lexeme + "\"";
-            }
-            else if (initializer)
-            {
-                result += "\n|-- InitializerExpression\n"
-                         "    " + initializer->toString();
-            }
+        if (inputStmt) {
+            auto input = dynamic_pointer_cast<InputStmt>(inputStmt);
+            result += "\n|-- Input\n";
+            result += "    |-- Prompt: \"" + input->prompt.lexeme + "\"";
         }
-        else
-        {
-            result += "    " + name.lexeme;
+        else if (initializer) {
+            result += "\n|-- Value\n";
+            result += "    " + indent(initializer->toString(), "    ");
         }
         return result;
     }
@@ -244,7 +214,7 @@ public:
     {
         return "PrintStatement\n"
                "|-- Expression\n"
-               "    " + expression->toString();
+               "    " + indent(expression->toString(), "    ");
     }
 };
 
@@ -257,29 +227,12 @@ public:
 
     std::string toString() const override
     {
-        std::string result = "CompoundStatement\n";
-        for (size_t i = 0; i < statements.size(); i++)
-        {
-            std::string stmtStr = statements[i]->toString();
-            if (i < statements.size() - 1) {
-                result += "|-- Statement[" + std::to_string(i+1) + "]\n";
-                size_t pos = 0;
-                while ((pos = stmtStr.find('\n', pos)) != std::string::npos)
-                {
-                    stmtStr.insert(pos + 1, "|   ");
-                    pos += 5;
-                }
-                result += "|   " + stmtStr + "\n";
-            } else {
-                result += "|-- Statement[" + std::to_string(i+1) + "]\n";
-                size_t pos = 0;
-                while ((pos = stmtStr.find('\n', pos)) != std::string::npos)
-                {
-                    stmtStr.insert(pos + 1, "    ");
-                    pos += 5;
-                }
-                result += "    " + stmtStr + "\n";
-            }
+        std::string result = "Block";
+        for (size_t i = 0; i < statements.size(); i++) {
+            bool isLast = (i == statements.size() - 1);
+            result += "\n|-- Statement[" + std::to_string(i+1) + "]\n";
+            result += (isLast ? "    " : "|   ") + 
+                     indent(statements[i]->toString(), isLast ? "    " : "|   ");
         }
         return result;
     }
@@ -297,20 +250,15 @@ public:
 
     std::string toString() const override
     {
-        std::string result = "ConditionalStatement\n"
-                            "|-- Condition\n"
-                            "|   " + condition->toString() + "\n"
-                            "|-- ThenBranch\n";
+        std::string result = "IfStatement\n";
+        result += "|-- Condition\n";
+        result += "|   " + indent(condition->toString(), "|   ");
+        result += "|-- Then\n";
+        result += "|   " + indent(thenBranch->toString(), "|   ");
         
-        if (elseBranch)
-        {
-            result += "|   " + thenBranch->toString() + "\n"
-                     "|-- ElseBranch\n"
-                     "    " + elseBranch->toString();
-        }
-        else
-        {
-            result += "    " + thenBranch->toString();
+        if (elseBranch) {
+            result += "|-- Else\n";
+            result += "    " + indent(elseBranch->toString(), "    ");
         }
         return result;
     }
@@ -327,10 +275,11 @@ public:
 
     std::string toString() const override
     {
-        return "WhileStatement\n"
-               "|-- Condition\n"
-               "|   " + condition->toString() + "\n"
-               "|-- Body\n"
-               "    " + body->toString();
+        std::string result = "WhileLoop\n";
+        result += "|-- Condition\n";
+        result += "|   " + indent(condition->toString(), "|   ");
+        result += "|-- Body\n";
+        result += "    " + indent(body->toString(), "    ");
+        return result;
     }
 };
