@@ -65,11 +65,28 @@ public:
 
     std::string toString() const override
     {
+        // Helper function to indent each line of a string
+        auto indentString = [](const std::string& str, const std::string& indent) {
+            std::string result;
+            size_t pos = 0, lastPos = 0;
+            while ((pos = str.find('\n', lastPos)) != std::string::npos) {
+                result += indent + str.substr(lastPos, pos - lastPos + 1);
+                lastPos = pos + 1;
+            }
+            if (lastPos < str.length()) {
+                result += indent + str.substr(lastPos);
+            }
+            return result;
+        };
+
+        std::string leftStr = left->toString();
+        std::string rightStr = right->toString();
+
         return "BinaryExpression (" + op.lexeme + ")\n"
                "|-- LeftOperand\n"
-               "|   " + left->toString() + "\n"
+               "|   " + indentString(leftStr, "|   ").substr(4) + "\n"
                "|-- RightOperand\n"
-               "    " + right->toString();
+               "    " + indentString(rightStr, "    ").substr(4);
     }
 };
 
@@ -132,11 +149,27 @@ public:
 
     std::string toString() const override
     {
+        // Helper function to indent each line of a string
+        auto indentString = [](const std::string& str, const std::string& indent) {
+            std::string result;
+            size_t pos = 0, lastPos = 0;
+            while ((pos = str.find('\n', lastPos)) != std::string::npos) {
+                result += indent + str.substr(lastPos, pos - lastPos + 1);
+                lastPos = pos + 1;
+            }
+            if (lastPos < str.length()) {
+                result += indent + str.substr(lastPos);
+            }
+            return result;
+        };
+
+        std::string exprStr = value->toString();
+        
         return "AssignmentStatement\n"
                "|-- Identifier\n"
                "|   " + name.lexeme + "\n"
                "|-- Expression\n"
-               "    " + value->toString();
+               "    " + indentString(exprStr, "    ").substr(4);
     }
 };
 
