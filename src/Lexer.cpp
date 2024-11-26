@@ -263,6 +263,42 @@ Token Lexer::scanToken()
         
         current--; // Move back to include the invalid symbol
         column--;
+        
+        // First check if it's a valid operator
+        char currentChar = source[current];
+        char nextChar = peekNext();
+        
+        // Check for valid double-character operators
+        if ((currentChar == '&' && nextChar == '&') ||
+            (currentChar == '|' && nextChar == '|') ||
+            (currentChar == '*' && nextChar == '*')) {
+            // Move back to original position and let the switch handle it
+            current++;
+            column++;
+            c = currentChar; // Restore the current character
+            
+            // Handle the operators directly here
+            switch (c) {
+                case '&':
+                    if (match('&')) {
+                        column++;
+                        return Token(TokenType::AND, std::string("&&"), line, startColumn, "");
+                    }
+                    break;
+                case '|':
+                    if (match('|')) {
+                        column++;
+                        return Token(TokenType::OR, std::string("||"), line, startColumn, "");
+                    }
+                    break;
+                case '*':
+                    if (match('*')) {
+                        column++;
+                        return Token(TokenType::POWER, std::string("**"), line, startColumn, "");
+                    }
+                    break;
+            }
+        }
 
         // Look ahead to see if this is part of an identifier or just invalid characters
         size_t lookAhead = current;

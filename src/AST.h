@@ -1,16 +1,16 @@
 /**
  * @file AST.h
  * @brief Abstract Syntax Tree node definitions for MiniLang
- * 
+ *
  * This file defines the class hierarchy for the Abstract Syntax Tree (AST).
  * The AST represents the syntactic structure of the program in a tree format.
- * 
+ *
  * Class hierarchy:
  * - Expression (abstract base class for expressions)
  *   - BinaryExpr (arithmetic and comparison operations)
  *   - LiteralExpr (numbers and strings)
  *   - VariableExpr (variable references)
- * 
+ *
  * - Statement (abstract base class for statements)
  *   - AssignmentStmt (variable assignments)
  *   - TypeDeclarationStmt (variable declarations)
@@ -34,7 +34,7 @@ class Statement;
 using ExprPtr = shared_ptr<Expression>;
 using StmtPtr = shared_ptr<Statement>;
 
-// Base classes for AST nodes
+// Abstract base classes for AST nodes
 class Expression
 {
 public:
@@ -77,7 +77,8 @@ public:
 
     std::string toString() const override
     {
-        if (value.type == TokenType::BOOLEAN) {
+        if (value.type == TokenType::BOOLEAN)
+        {
             return value.numValue != 0 ? "true" : "false";
         }
         return value.lexeme;
@@ -109,7 +110,11 @@ public:
 
     std::string toString() const override
     {
-        return name.lexeme + " = " + value->toString() + ";";
+        return "AssignmentStmt\n"
+               "|-- Variable: " +
+               name.lexeme + "\n"
+                             "|-- Value: " +
+               value->toString() + "\n";
     }
 };
 
@@ -124,7 +129,11 @@ public:
 
     std::string toString() const override
     {
-        return name.lexeme + " = read(\"" + prompt.lexeme + "\");";
+        return "InputStmt\n"
+               "|-- Variable: " +
+               name.lexeme + "\n"
+                             "|-- Prompt: \"" +
+               prompt.lexeme + "\"\n";
     }
 };
 
@@ -141,15 +150,24 @@ public:
 
     std::string toString() const override
     {
-        if (inputStmt) {
-            auto input = dynamic_pointer_cast<InputStmt>(inputStmt);
-            return type.lexeme + " " + name.lexeme + " = r(\"" + input->prompt.lexeme + "\");";
-        }
-        if (initializer)
+        std::string result = "TypeDeclarationStmt\n"
+                             "|-- Type: " +
+                             type.lexeme + "\n"
+                                           "|-- Name: " +
+                             name.lexeme + "\n";
+
+        if (inputStmt)
         {
-            return type.lexeme + " " + name.lexeme + " = " + initializer->toString() + ";";
+            auto input = dynamic_pointer_cast<InputStmt>(inputStmt);
+            result += "|-- Input:\n"
+                      "    |-- Prompt: \"" +
+                      input->prompt.lexeme + "\"\n";
         }
-        return type.lexeme + " " + name.lexeme + ";";
+        else if (initializer)
+        {
+            result += "|-- Initializer: " + initializer->toString() + "\n";
+        }
+        return result;
     }
 };
 
@@ -162,7 +180,9 @@ public:
 
     std::string toString() const override
     {
-        return "print " + expression->toString() + ";";
+        return "PrintStmt\n"
+               "|-- Expression: " +
+               expression->toString() + "\n";
     }
 };
 
@@ -175,11 +195,20 @@ public:
 
     std::string toString() const override
     {
-        std::string result = "{\n";
-        for (const auto& stmt : statements) {
-            result += "  " + stmt->toString() + "\n";
+        std::string result = "BlockStmt\n";
+        for (const auto &stmt : statements)
+        {
+            // Indent each statement in the block
+            std::string stmtStr = stmt->toString();
+            // Add 4 spaces to each line of the statement
+            size_t pos = 0;
+            while ((pos = stmtStr.find('\n', pos)) != std::string::npos)
+            {
+                stmtStr.insert(pos + 1, "    ");
+                pos += 5;
+            }
+            result += "    " + stmtStr;
         }
-        result += "}";
         return result;
     }
 };
@@ -196,11 +225,33 @@ public:
 
     std::string toString() const override
     {
-        std::string result = "if (" + condition->toString() + ") ";
-        result += thenBranch->toString();
+        std::string result = "IfStmt\n"
+                             "|-- Condition: " +
+                             condition->toString() + "\n"
+                                                     "|-- Then Branch:\n";
+
+        // Add then branch with indentation
+        std::string thenStr = thenBranch->toString();
+        size_t pos = 0;
+        while ((pos = thenStr.find('\n', pos)) != std::string::npos)
+        {
+            thenStr.insert(pos + 1, "    ");
+            pos += 5;
+        }
+        result += "    " + thenStr;
+
+        // Add else branch if it exists
         if (elseBranch)
         {
-            result += " else " + elseBranch->toString();
+            result += "|-- Else Branch:\n";
+            std::string elseStr = elseBranch->toString();
+            pos = 0;
+            while ((pos = elseStr.find('\n', pos)) != std::string::npos)
+            {
+                elseStr.insert(pos + 1, "    ");
+                pos += 5;
+            }
+            result += "    " + elseStr;
         }
         return result;
     }
@@ -217,6 +268,20 @@ public:
 
     std::string toString() const override
     {
-        return "while (" + condition->toString() + ") " + body->toString();
+        std::string result = "WhileStmt\n"
+                             "|-- Condition: " +
+                             condition->toString() + "\n"
+                                                     "|-- Body:\n";
+
+        // Add body with indentation
+        std::string bodyStr = body->toString();
+        size_t pos = 0;
+        while ((pos = bodyStr.find('\n', pos)) != std::string::npos)
+        {
+            bodyStr.insert(pos + 1, "    ");
+            pos += 5;
+        }
+        result += "    " + bodyStr;
+        return result;
     }
 };

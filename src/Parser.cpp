@@ -27,76 +27,121 @@ vector<StmtPtr> parse(const vector<Token> &tokens)
   ParserState state(tokens);
   vector<StmtPtr> statements;
 
-  while (!isAtEnd(state))
-  {
-    statements.push_back(parseStatement(state));
+  try {
+    while (!isAtEnd(state)) {
+        statements.push_back(parseStatement(state));
+    }
+
+    // Check for any unclosed delimiters at the end
+    if (!state.delimiterStack.empty()) {
+        Delimiter unclosed = state.delimiterStack.back();
+        throw runtime_error("Line " + to_string(unclosed.line) + 
+            ", Column " + to_string(unclosed.column) + 
+            ": Unclosed " + tokenToString(unclosed.type));
+    }
+  } catch (const runtime_error& e) {
+    throw;
   }
+
   return statements;
 }
 
 /**
- * @brief Helper functions for token manipulation
+ * @brief Helper functions for parsing
  */
-bool isAtEnd(const ParserState &state)
-{
-  return peek(state).type == TokenType::EOF_TOKEN;
-}
 
-Token peek(const ParserState &state)
-{
-  return state.tokens[state.current];
-}
-
-Token peekNext(const ParserState &state, int lookahead)
-{
-  return state.tokens[state.current + lookahead];
-}
-
-Token previous(const ParserState &state)
-{
-  return state.tokens[state.current - 1];
-}
-
-Token advance(ParserState &state)
-{
-  if (!isAtEnd(state))
-  {
-    state.current++;
-  }
-  return previous(state);
-}
-
-bool check(const ParserState &state, TokenType type)
-{
-  return !isAtEnd(state) && peek(state).type == type;
-}
-
-bool match(ParserState &state, TokenType type)
-{
-  if (check(state, type))
-  {
-    advance(state);
-    return true;
-  }
-  return false;
+/**
+ * @brief Checks if we've reached the end of the token stream
+ * @param state Current parser state containing tokens and position
+ * @return true if current token is EOF_TOKEN, false otherwise
+ */
+bool isAtEnd(const ParserState &state) {
+    return peek(state).type == TokenType::EOF_TOKEN;
 }
 
 /**
- * @brief Helper function to consume an expected token
- *
+ * @brief Returns the current token without consuming it (moving forward)
+ * @param state Current parser state
+ * @return Token at current position
+ */
+Token peek(const ParserState &state) {
+    return state.tokens[state.current];
+}
+
+/**
+ * @brief Looks ahead in the token stream by a specified number of tokens
+ * Useful for multi-token lookahead when parsing complex constructs
+ * @param state Current parser state
+ * @param lookahead Number of tokens to look ahead (default: 1)
+ * @return Token at current position + lookahead
+ */
+Token peekNext(const ParserState &state, int lookahead) {
+    return state.tokens[state.current + lookahead];
+}
+
+/**
+ * @brief Returns the previously consumed token
+ * Used after advancing to access the token we just processed
+ * @param state Current parser state
+ * @return Token at (current - 1) position
+ */
+Token previous(const ParserState &state) {
+    return state.tokens[state.current - 1];
+}
+
+/**
+ * @brief Consumes and returns the current token, advancing the position
+ * Main method for moving through the token stream during parsing
+ * @param state Current parser state
+ * @return Token that was just consumed
+ */
+Token advance(ParserState &state) {
+    if (!isAtEnd(state)) {
+        state.current++;  // Move to next token if not at end
+    }
+    return previous(state);  // Return the token we just passed
+}
+
+/**
+ * @brief Checks if the current token matches the expected type
+ * Used for conditional parsing decisions without consuming the token
+ * @param state Current parser state
+ * @param type Expected token type
+ * @return true if current token matches type, false otherwise
+ */
+bool check(const ParserState &state, TokenType type) {
+    return !isAtEnd(state) && peek(state).type == type;
+}
+
+/**
+ * @brief Tries to match and consume a token of the expected type
+ * Combines check() and advance() for convenient token consumption
+ * @param state Current parser state
+ * @param type Expected token type
+ * @return true if token was matched and consumed, false otherwise
+ */
+bool match(ParserState &state, TokenType type) {
+    if (check(state, type)) {
+        advance(state);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief Consumes a token if it matches the expected type, throws error otherwise
+ * Used when a specific token is required by the grammar
  * @param state Current parser state
  * @param type Expected token type
  * @param message Error message if token doesn't match
- * @throws runtime_error if the expected token is not found
+ * @throws runtime_error with detailed error message if token type doesn't match
  */
-void consume(ParserState &state, TokenType type, const string &message)
-{
-  if (check(state, type))
-  {
-    advance(state);
-    return;
-  }
-  throw runtime_error(createErrorMessage(state, message));
+void consume(ParserState &state, TokenType type, const string message) {
+    if (check(state, type)) {
+        advance(state);
+        return;
+    }
+    throw runtime_error(createErrorMessage(state, message));
 }
 
 /**
@@ -118,6 +163,37 @@ StmtPtr parseStatement(ParserState &state)
 {
     try
     {
+        Token current = peek(state);
+        Token next = peekNext(state);
+
+        // Check for invalid statement patterns
+        if (current.type == TokenType::PLUS || current.type == TokenType::MINUS ||
+            current.type == TokenType::MULTIPLY || current.type == TokenType::DIVIDE) {
+            throw runtime_error(createErrorMessage(state, 
+                "Invalid statement: cannot start with operator '" + current.lexeme + "'"));
+        }
+
+        // Check for consecutive identifiers
+        if (current.type == TokenType::IDENTIFIER && next.type == TokenType::IDENTIFIER) {
+            throw runtime_error(createErrorMessage(state, 
+                "Invalid statement: unexpected identifier '" + next.lexeme + 
+                "' after identifier '" + current.lexeme + "' - did you mean to use an operator?"));
+        }
+
+        // Check for invalid left-hand side of assignment
+        if (current.type == TokenType::IDENTIFIER && next.type == TokenType::PLUS) {
+            Token afterPlus = peekNext(state, 2);
+            if (afterPlus.type == TokenType::IDENTIFIER || 
+                afterPlus.type == TokenType::INTEGER || 
+                afterPlus.type == TokenType::DOUBLE) {
+                Token afterExpr = peekNext(state, 3);
+                if (afterExpr.type == TokenType::ASSIGN) {
+                    throw runtime_error(createErrorMessage(state, 
+                        "Invalid assignment: left side must be a single identifier"));
+                }
+            }
+        }
+
         if (match(state, TokenType::IF))
         {
             return parseIf(state);
@@ -179,9 +255,7 @@ StmtPtr parseInput(ParserState &state)
   // Check for either READ token or 'r'
   if (!match(state, TokenType::READ) && peek(state).lexeme != "r")
   {
-    throw runtime_error("Line " + to_string(peek(state).line) + 
-                        ", Column " + to_string(peek(state).column) + 
-                        ": Expected 'r' after '='");
+    throw runtime_error(createErrorMessage(state, "Expected 'r' after '='"));
   }
   if (peek(state).lexeme == "r")
   {
@@ -193,9 +267,7 @@ StmtPtr parseInput(ParserState &state)
   // Expect a string literal for the prompt
   if (!match(state, TokenType::STRING))
   {
-    throw runtime_error("Line " + to_string(peek(state).line) + 
-                        ", Column " + to_string(peek(state).column) + 
-                        ": Expected string prompt in r statement");
+    throw runtime_error(createErrorMessage(state, "Expected string prompt in r statement"));
   }
   Token prompt = previous(state);
 
@@ -231,17 +303,40 @@ StmtPtr parsePrint(ParserState &state)
 StmtPtr parseBlock(ParserState &state) {
     vector<StmtPtr> statements;
     
-    // Consume the opening brace if not already consumed
+    Token openBrace = peek(state);
     if (!match(state, TokenType::LBRACE)) {
         consume(state, TokenType::LBRACE, "Expected '{' at start of block");
     }
+    pushDelimiter(state, TokenType::LBRACE, openBrace.line, openBrace.column);
     
-    // Parse statements until we reach a closing brace
     while (!check(state, TokenType::RBRACE) && !isAtEnd(state)) {
-        statements.push_back(parseStatement(state));
+        // Check for misplaced closing parenthesis
+        if (check(state, TokenType::RPAREN)) {
+            throw runtime_error(createErrorMessage(state, 
+                "Unexpected ')' in block - did you mean '}'?"));
+        }
+
+        try {
+            checkInvalidTokenSequence(state);
+            statements.push_back(parseStatement(state));
+        } catch (const runtime_error& e) {
+            throw;
+        }
     }
     
-    consume(state, TokenType::RBRACE, "Expected '}' after block");
+    if (check(state, TokenType::RBRACE)) {
+        popDelimiter(state, TokenType::RBRACE, "block");
+        advance(state);
+    } else {
+        if (!state.delimiterStack.empty()) {
+            Delimiter unclosed = state.delimiterStack.back();
+            throw runtime_error("Line " + to_string(unclosed.line) + 
+                ", Column " + to_string(unclosed.column) + 
+                ": Unclosed " + tokenToString(unclosed.type) + 
+                " - missing closing '}'");
+        }
+    }
+    
     return make_shared<BlockStmt>(statements);
 }
 
@@ -256,9 +351,24 @@ StmtPtr parseBlock(ParserState &state) {
  */
 StmtPtr parseIf(ParserState &state)
 {
+    Token openParen = peek(state);
     consume(state, TokenType::LPAREN, "Expected '(' after 'if'");
+    pushDelimiter(state, TokenType::LPAREN, openParen.line, openParen.column);
+    
+    if (check(state, TokenType::RPAREN)) {
+        throw runtime_error(createErrorMessage(state, 
+            "Empty condition in if statement"));
+    }
+    
     ExprPtr condition = parseComparison(state);
+    
+    if (!check(state, TokenType::RPAREN)) {
+        throw runtime_error(createErrorMessage(state, 
+            "Missing closing ')' after if condition"));
+    }
+    
     consume(state, TokenType::RPAREN, "Expected ')' after if condition");
+    popDelimiter(state, TokenType::RPAREN, "if condition");
 
     // Parse the then branch
     StmtPtr thenBranch;
@@ -329,11 +439,7 @@ StmtPtr parseAssignment(ParserState &state)
     
     // Check for semicolon immediately after the expression
     if (!check(state, TokenType::SEMICOLON)) {
-        // Get the last token of the expression for error position
-        Token lastToken = previous(state);
-        throw runtime_error("Line " + to_string(lastToken.line) + 
-                          ", Column " + to_string(lastToken.column + lastToken.lexeme.length()) + 
-                          ": Expected ';' after value");
+        throw runtime_error(createErrorMessage(state, "Expected ';' after value"));
     }
     
     consume(state, TokenType::SEMICOLON, "Expected ';' after value");
@@ -342,29 +448,69 @@ StmtPtr parseAssignment(ParserState &state)
 
 /**
  * @brief Parses a comparison expression
- *
- * Handles comparison operators: >, <, >=, <=, ==, !=
- *
- * @param state Current parser state
- * @return ExprPtr Pointer to a BinaryExpr node for the comparison
+ * Handles comparison operators and logical operators (&&, ||)
  */
 ExprPtr parseComparison(ParserState &state)
 {
-  ExprPtr expr = parseExpression(state);
+    ExprPtr expr = parseExpression(state);
 
-  while (match(state, TokenType::GREATER) ||
-         match(state, TokenType::GREATER_EQUAL) ||
-         match(state, TokenType::LESS) ||
-         match(state, TokenType::LESS_EQUAL) ||
-         match(state, TokenType::EQUAL_EQUAL) ||
-         match(state, TokenType::NOT_EQUAL))
-  {
-    Token op = previous(state);
-    ExprPtr right = parseExpression(state);
-    expr = make_shared<BinaryExpr>(expr, op, right);
-  }
+    while (match(state, TokenType::GREATER) ||
+           match(state, TokenType::GREATER_EQUAL) ||
+           match(state, TokenType::LESS) ||
+           match(state, TokenType::LESS_EQUAL) ||
+           match(state, TokenType::EQUAL_EQUAL) ||
+           match(state, TokenType::NOT_EQUAL) ||
+           match(state, TokenType::AND) ||      // Add AND operator
+           match(state, TokenType::OR))         // Add OR operator
+    {
+        Token op = previous(state);
+        ExprPtr right = parseExpression(state);
+        expr = make_shared<BinaryExpr>(expr, op, right);
+    }
 
-  return expr;
+    return expr;
+}
+
+/**
+ * @brief Parses an expression
+ *
+ * This function handles expressions at the addition/subtraction level.
+ * It follows the operator precedence by first parsing terms (multiplication/division)
+ * and then handling any + or - operators.
+ *
+ * Grammar rule:
+ * expression -> term (('+' | '-') term)*
+ *
+ * @param state Current parser state
+ * @return ExprPtr Pointer to the parsed expression
+ */
+ExprPtr parseExpression(ParserState &state) {
+    // Check for expression starting with binary operator
+    Token next = peek(state);
+    if (next.type == TokenType::PLUS || next.type == TokenType::MINUS ||
+        next.type == TokenType::MULTIPLY || next.type == TokenType::DIVIDE) {
+        throw runtime_error(createErrorMessage(state, 
+            "Expression cannot start with operator '" + next.lexeme + "'"));
+    }
+
+    ExprPtr expr = parseTerm(state);
+
+    while (match(state, TokenType::PLUS) || match(state, TokenType::MINUS)) {
+        Token op = previous(state);
+        
+        // Check for missing right operand
+        if (check(state, TokenType::SEMICOLON) || check(state, TokenType::RPAREN)) {
+            throw runtime_error(createErrorMessage(state, 
+                "Missing right operand after operator '" + op.lexeme + "'"));
+        }
+
+        ExprPtr right = parseTerm(state);
+        expr = make_shared<BinaryExpr>(expr, op, right);
+        
+        checkInvalidTokenSequence(state);
+    }
+
+    return expr;
 }
 
 /**
@@ -462,33 +608,6 @@ ExprPtr parsePrimary(ParserState &state)
 }
 
 /**
- * @brief Parses an expression
- *
- * This function handles expressions at the addition/subtraction level.
- * It follows the operator precedence by first parsing terms (multiplication/division)
- * and then handling any + or - operators.
- *
- * Grammar rule:
- * expression -> term (('+' | '-') term)*
- *
- * @param state Current parser state
- * @return ExprPtr Pointer to the parsed expression
- */
-ExprPtr parseExpression(ParserState &state)
-{
-  ExprPtr expr = parseTerm(state);
-
-  while (match(state, TokenType::PLUS) || match(state, TokenType::MINUS))
-  {
-    Token op = previous(state);
-    ExprPtr right = parseTerm(state);
-    expr = make_shared<BinaryExpr>(expr, op, right);
-  }
-
-  return expr;
-}
-
-/**
  * @brief Parses a type declaration statement with optional initialization
  *
  * This function handles three forms of type declarations:
@@ -510,16 +629,21 @@ StmtPtr parseTypeDeclaration(ParserState &state)
     Token type = previous(state);
     Token name = advance(state);
 
-    // Check if identifier starts with a number
+    // Check for valid identifier pattern (must start with letter or underscore)
     if (name.type != TokenType::IDENTIFIER) {
-        if (name.type == TokenType::INTEGER || (name.type == TokenType::IDENTIFIER && isdigit(name.lexeme[0]))) {
-            throw runtime_error("Line " + to_string(peek(state).line) + 
-                              ", Column " + to_string(name.column) + 
-                              ": Invalid variable name: identifier cannot start with a number");
+        // First check if it starts with a digit
+        if (isdigit(name.lexeme[0])) {
+            throw runtime_error(createErrorMessage(state, 
+                "Invalid identifier: cannot start with a number"));
         }
-        throw runtime_error("Line " + to_string(peek(state).line) + 
-                          ", Column " + to_string(name.column) + 
-                          ": Invalid variable name '" + name.lexeme + "'");
+        // Then check if it starts with letter or underscore
+        if (!isalpha(name.lexeme[0]) && name.lexeme[0] != '_') {
+            throw runtime_error(createErrorMessage(state, 
+                "Invalid identifier: must start with a letter or underscore"));
+        }
+        // If we get here, it's some other invalid pattern
+        throw runtime_error(createErrorMessage(state, 
+            "Invalid identifier: '" + name.lexeme + "'"));
     }
 
     ExprPtr initializer = nullptr;
@@ -542,9 +666,7 @@ StmtPtr parseTypeDeclaration(ParserState &state)
 
             if (!match(state, TokenType::STRING))
             {
-                throw runtime_error("Line " + to_string(peek(state).line) + 
-                                    ", Column " + to_string(peek(state).column) + 
-                                    ": Expected string prompt in r statement");
+                throw runtime_error(createErrorMessage(state, "Expected string prompt in r statement"));
             }
             Token prompt = previous(state);
 
@@ -559,8 +681,9 @@ StmtPtr parseTypeDeclaration(ParserState &state)
         }
         else
         {
-            // Regular initialization
-            initializer = parseExpression(state);
+            // Regular initialization - use parseComparison instead of parseExpression
+            // to handle logical operators
+            initializer = parseComparison(state);
             consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
         }
     }
@@ -571,6 +694,7 @@ StmtPtr parseTypeDeclaration(ParserState &state)
 
     return make_shared<TypeDeclarationStmt>(type, name, initializer);
 }
+
 
 /**
  * @brief Creates and returns a string representation of the AST
@@ -584,82 +708,19 @@ StmtPtr parseTypeDeclaration(ParserState &state)
  */
 string createASTString(const StmtPtr &stmt, int indent = 0)
 {
-    string result;
-    string indentation(indent, ' ');
-
-    // Helper lambda to add indented line
-    auto addLine = [&](const string &text) {
-        result += indentation + text + "\n";
-    };
-
-    // Handle Block Statements
-    if (auto blockStmt = dynamic_pointer_cast<BlockStmt>(stmt))
-    {
-        addLine("BlockStmt");
-        for (const auto& statement : blockStmt->statements) {
-            result += createASTString(statement, indent + 4);
-        }
+    if (!stmt) return "";
+    
+    // Add indentation to each line of the statement's string representation
+    std::string stmtStr = stmt->toString();
+    std::string indentation(indent, ' ');
+    
+    size_t pos = 0;
+    while ((pos = stmtStr.find('\n', pos)) != std::string::npos) {
+        stmtStr.insert(pos + 1, indentation);
+        pos += indentation.length() + 1;
     }
-    // Handle Assignment Statements
-    else if (auto assignStmt = dynamic_pointer_cast<AssignmentStmt>(stmt))
-    {
-        addLine("AssignmentStmt");
-        addLine("|-- Variable: " + assignStmt->name.lexeme);
-        addLine("|-- Value: " + assignStmt->value->toString());
-    }
-    // Handle Print Statements
-    else if (auto printStmt = dynamic_pointer_cast<PrintStmt>(stmt))
-    {
-        addLine("PrintStmt");
-        addLine("|-- Expression: " + printStmt->expression->toString());
-    }
-    // Handle Input Statements
-    else if (auto inputStmt = dynamic_pointer_cast<InputStmt>(stmt))
-    {
-        addLine("InputStmt");
-        addLine("|-- Variable: " + inputStmt->name.lexeme);
-        addLine("|-- Prompt: \"" + inputStmt->prompt.lexeme + "\"");
-    }
-    // Handle If Statements
-    else if (auto ifStmt = dynamic_pointer_cast<IfStmt>(stmt))
-    {
-        addLine("IfStmt");
-        addLine("|-- Condition: " + ifStmt->condition->toString());
-        addLine("|-- Then Branch:");
-        result += createASTString(ifStmt->thenBranch, indent + 4);
-        if (ifStmt->elseBranch)
-        {
-            addLine("|-- Else Branch:");
-            result += createASTString(ifStmt->elseBranch, indent + 4);
-        }
-    }
-    // Handle While Statements
-    else if (auto whileStmt = dynamic_pointer_cast<WhileStmt>(stmt))
-    {
-        addLine("WhileStmt");
-        addLine("|-- Condition: " + whileStmt->condition->toString());
-        addLine("|-- Body:");
-        result += createASTString(whileStmt->body, indent + 4);
-    }
-    // Handle Type Declaration Statements
-    else if (auto declStmt = dynamic_pointer_cast<TypeDeclarationStmt>(stmt))
-    {
-        addLine("TypeDeclarationStmt");
-        addLine("|-- Type: " + declStmt->type.lexeme);
-        addLine("|-- Name: " + declStmt->name.lexeme);
-        if (declStmt->inputStmt)
-        {
-            auto input = dynamic_pointer_cast<InputStmt>(declStmt->inputStmt);
-            addLine("|-- Input:");
-            addLine("    |-- Prompt: \"" + input->prompt.lexeme + "\"");
-        }
-        else if (declStmt->initializer)
-        {
-            addLine("|-- Initializer: " + declStmt->initializer->toString());
-        }
-    }
-
-    return result;
+    
+    return indentation + stmtStr;
 }
 
 /**
@@ -681,8 +742,14 @@ string createCompleteASTString(const vector<StmtPtr> &statements)
     return result;
 }
 
-// Add this helper function at the top of Parser.cpp
-string createErrorMessage(const ParserState &state, const string &message) {
+/**
+ * @brief Creates an error message with line content and pointer
+ *
+ * @param state Current parser state
+ * @param message Error message
+ * @return string Error message with line content and pointer
+ */
+string createErrorMessage(const ParserState &state, const string message) {
     Token currentToken = peek(state);
     int line = currentToken.line;
     int column = currentToken.column;
@@ -706,4 +773,86 @@ string createErrorMessage(const ParserState &state, const string &message) {
     errorMsg += string(column - 1, ' ') + "^";
     
     return errorMsg;
+}
+
+// Add these helper functions to Parser.cpp
+void pushDelimiter(ParserState& state, TokenType type, int line, int column) {
+    Delimiter delim{type, line, column};
+    state.delimiterStack.push_back(delim);
+}
+
+void popDelimiter(ParserState& state, TokenType expectedClosing, const string& context) {
+    if (state.delimiterStack.empty()) {
+        throw runtime_error(createErrorMessage(state, 
+            "Unexpected closing " + tokenToString(expectedClosing) + " in " + context));
+    }
+
+    Delimiter opening = state.delimiterStack.back();
+    state.delimiterStack.pop_back();
+
+    // Check if the delimiters match
+    if ((opening.type == TokenType::LPAREN && expectedClosing != TokenType::RPAREN) ||
+        (opening.type == TokenType::LBRACE && expectedClosing != TokenType::RBRACE)) {
+        throw runtime_error(createErrorMessage(state, 
+            "Mismatched delimiters: expected closing " + 
+            tokenToString(opening.type) + " from line " + 
+            to_string(opening.line) + ", column " + 
+            to_string(opening.column)));
+    }
+}
+
+// Add helper function to convert TokenType to string
+string tokenToString(TokenType type) {
+    switch (type) {
+        case TokenType::LPAREN: return "'('";
+        case TokenType::RPAREN: return "')'";
+        case TokenType::LBRACE: return "'{'";
+        case TokenType::RBRACE: return "'}'";
+        default: return tokenTypeToString(type);  // Use existing function for other types
+    }
+}
+
+void checkInvalidTokenSequence(ParserState& state) {
+    Token current = peek(state);
+    Token next = peekNext(state);
+
+    // Check for invalid token sequences
+    if (current.type == TokenType::IDENTIFIER && next.type == TokenType::IDENTIFIER) {
+        throw runtime_error(createErrorMessage(state, 
+            "Unexpected identifier '" + next.lexeme + "' after identifier '" + current.lexeme + "'"));
+    }
+
+    // Check for expression on left side of assignment
+    if (current.type == TokenType::IDENTIFIER && next.type == TokenType::PLUS) {
+        Token nextNext = peekNext(state, 2);
+        if (nextNext.type == TokenType::IDENTIFIER && 
+            peekNext(state, 3).type == TokenType::ASSIGN) {
+            throw runtime_error(createErrorMessage(state, 
+                "Invalid assignment: expression cannot appear on left side of '='"));
+        }
+    }
+
+    // Check for invalid operator sequences
+    bool currentIsOperator = (current.type == TokenType::PLUS || current.type == TokenType::MINUS ||
+                            current.type == TokenType::MULTIPLY || current.type == TokenType::DIVIDE);
+    bool nextIsOperator = (next.type == TokenType::PLUS || next.type == TokenType::MINUS ||
+                          next.type == TokenType::MULTIPLY || next.type == TokenType::DIVIDE);
+    
+    if (currentIsOperator && nextIsOperator) {
+        throw runtime_error(createErrorMessage(state, 
+            "Invalid operator sequence: unexpected '" + next.lexeme + "' after '" + current.lexeme + "'"));
+    }
+
+    // Check for invalid sequences with parentheses
+    if (current.type == TokenType::RPAREN && next.type == TokenType::LPAREN) {
+        throw runtime_error(createErrorMessage(state, 
+            "Invalid expression: missing operator between ')' and '('"));
+    }
+
+    // Check for invalid sequences with operators
+    if (currentIsOperator && (next.type == TokenType::SEMICOLON || 
+                             next.type == TokenType::RPAREN)) {
+        throw runtime_error(createErrorMessage(state, 
+            "Invalid expression: operator '" + current.lexeme + "' missing right operand"));
+    }
 }

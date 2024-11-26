@@ -20,19 +20,30 @@
 #include <stdexcept>
 #include <string>
 
+// Add Delimiter struct before ParserState
+struct Delimiter {
+    TokenType type;  // The type of delimiter (LPAREN, LBRACE, etc.)
+    int line;        // Line where it appears
+    int column;      // Column where it appears
+};
+
 /**
  * @brief Maintains the state of the parser during parsing
- * 
- * ParserState keeps track of the token stream and the current position
- * within that stream during parsing.
  */
 struct ParserState
 {
     const std::vector<Token> &tokens;  ///< Reference to the token stream
     size_t current;                    ///< Current position in the token stream
+    std::vector<Delimiter> delimiterStack;  ///< Stack to track opening/closing delimiters
 
-    ParserState(const std::vector<Token> &tokens) : tokens(tokens), current(0) {}
+    ParserState(const std::vector<Token> &tokens) 
+        : tokens(tokens), current(0) {}
 };
+
+// Add function declarations for delimiter helpers
+void pushDelimiter(ParserState& state, TokenType type, int line, int column);
+void popDelimiter(ParserState& state, TokenType expectedClosing, const std::string& context);
+std::string tokenToString(TokenType type);
 
 /**
  * @brief Main entry point for parsing
@@ -85,7 +96,7 @@ bool match(ParserState &state, TokenType type);
  * @param message Error message to display if token type doesn't match
  * @throws std::runtime_error if the expected token type is not found
  */
-void consume(ParserState &state, TokenType type, const std::string &message);
+void consume(ParserState &state, TokenType type, const std::string message);
 
 // Statement Parsing Functions
 
@@ -174,4 +185,17 @@ ExprPtr parsePrimary(ParserState &state);
 /**
  * @brief Creates an error message with line content and pointer
  */
-string createErrorMessage(const ParserState &state, const std::string &message);
+string createErrorMessage(const ParserState &state, const std::string message);
+
+/**
+ * @brief Checks for invalid token sequences in the input
+ * 
+ * Validates token sequences and throws errors for:
+ * - Consecutive identifiers
+ * - Missing operators between expressions
+ * - Consecutive operators
+ * 
+ * @param state Current parser state
+ * @throws runtime_error if an invalid token sequence is found
+ */
+void checkInvalidTokenSequence(ParserState& state);

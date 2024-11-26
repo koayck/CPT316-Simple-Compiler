@@ -111,6 +111,3 @@ RPAREN : ')';
 LBRACE : '{';
 RBRACE : '}';
 SEMICOLON : ';';
-
-// Skip whitespace and comments
-WS : [ \t\r\n]+ -> skip;
