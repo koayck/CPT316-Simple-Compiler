@@ -1,1 +1,26 @@
-x y = 10;
+int a = 10 + 20 + 30;
+int b = r("Enter value for b: ");
+b = 20 - 5;
+double c = 30.5 ** 2;
+double d = 40.5/2;
+string input_greeting = "Hello, World!";
+bool g = true;
+bool f = true;
+bool h = false;
+bool i = false;
+while (f) {
+    if (a >= b) {
+        if (g) {
+            a = a*b;
+            p(e);
+            if (i) {
+                p("i is true Next line");
+            } else {
+                p("i is false Indented new line");
+            }
+            double result = c + d;
+            p("Sum of c and d is: " + result);
+            f = false;
+        }
+    }
+}
