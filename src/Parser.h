@@ -167,14 +167,16 @@ ExprPtr parseExpression(ParserState &state);
 ExprPtr parseTerm(ParserState &state);
 
 /**
- * @brief Parses unary operations and factors
+ * @brief Parses factors (multiplication/division)
+ * Has higher precedence than addition/subtraction
  */
 ExprPtr parseFactor(ParserState &state);
 
 /**
- * @brief Parses exponentiation operations
+ * @brief Parses unary expressions (!, -)
+ * Handles unary operators with right-associative binding
  */
-ExprPtr parsePower(ParserState &state);
+ExprPtr parseUnary(ParserState &state);
 
 /**
  * @brief Parses primary expressions (literals, identifiers, parenthesized expressions)
@@ -199,3 +201,8 @@ string createErrorMessage(const ParserState &state, const std::string message);
  * @throws runtime_error if an invalid token sequence is found
  */
 void checkInvalidTokenSequence(ParserState& state);
+
+/**
+ * @brief Parses power expressions (** operator)
+ */
+ExprPtr parsePower(ParserState &state);

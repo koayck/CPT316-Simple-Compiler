@@ -10,6 +10,7 @@
  *   - BinaryExpr (arithmetic and comparison operations)
  *   - LiteralExpr (numbers and strings)
  *   - VariableExpr (variable references)
+ *   - UnaryExpr (unary operations)
  *
  * - Statement (abstract base class for statements)
  *   - AssignmentStmt (variable assignments)
@@ -95,6 +96,21 @@ public:
     std::string toString() const override
     {
         return name.lexeme;
+    }
+};
+
+class UnaryExpr : public Expression
+{
+public:
+    Token op;
+    ExprPtr right;
+
+    UnaryExpr(Token op, ExprPtr right)
+        : op(op), right(right) {}
+
+    std::string toString() const override
+    {
+        return "(" + op.lexeme + right->toString() + ")";
     }
 };
 

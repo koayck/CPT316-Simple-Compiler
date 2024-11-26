@@ -493,18 +493,17 @@ ExprPtr parseExpression(ParserState &state) {
             "Expression cannot start with operator '" + next.lexeme + "'"));
     }
 
-    ExprPtr expr = parseTerm(state);
+    ExprPtr expr = parsePower(state);
 
     while (match(state, TokenType::PLUS) || match(state, TokenType::MINUS)) {
         Token op = previous(state);
         
-        // Check for missing right operand
         if (check(state, TokenType::SEMICOLON) || check(state, TokenType::RPAREN)) {
             throw runtime_error(createErrorMessage(state, 
                 "Missing right operand after operator '" + op.lexeme + "'"));
         }
 
-        ExprPtr right = parseTerm(state);
+        ExprPtr right = parsePower(state);
         expr = make_shared<BinaryExpr>(expr, op, right);
         
         checkInvalidTokenSequence(state);
@@ -545,18 +544,16 @@ ExprPtr parseTerm(ParserState &state)
  * @param state Current parser state
  * @return ExprPtr Pointer to the resulting expression
  */
-ExprPtr parseFactor(ParserState &state)
-{
-  ExprPtr expr = parsePrimary(state);
+ExprPtr parseFactor(ParserState &state) {
+    ExprPtr expr = parseUnary(state);
 
-  while (match(state, TokenType::MULTIPLY) || match(state, TokenType::DIVIDE))
-  {
-    Token op = previous(state);
-    ExprPtr right = parsePrimary(state);
-    expr = make_shared<BinaryExpr>(expr, op, right);
-  }
+    while (match(state, TokenType::MULTIPLY) || match(state, TokenType::DIVIDE)) {
+        Token op = previous(state);
+        ExprPtr right = parseUnary(state);
+        expr = make_shared<BinaryExpr>(expr, op, right);
+    }
 
-  return expr;
+    return expr;
 }
 
 /**
@@ -695,6 +692,25 @@ StmtPtr parseTypeDeclaration(ParserState &state)
     return make_shared<TypeDeclarationStmt>(type, name, initializer);
 }
 
+/**
+ * @brief Parses a power expression
+ *
+ * Handles the power operator (`**`)
+ *
+ * @param state Current parser state
+ * @return ExprPtr Pointer to the parsed power expression
+ */
+ExprPtr parsePower(ParserState &state) {
+    ExprPtr expr = parseTerm(state);
+
+    while (match(state, TokenType::POWER)) {
+        Token op = previous(state);
+        ExprPtr right = parseTerm(state);
+        expr = make_shared<BinaryExpr>(expr, op, right);
+    }
+
+    return expr;
+}
 
 /**
  * @brief Creates and returns a string representation of the AST
@@ -855,4 +871,16 @@ void checkInvalidTokenSequence(ParserState& state) {
         throw runtime_error(createErrorMessage(state, 
             "Invalid expression: operator '" + current.lexeme + "' missing right operand"));
     }
+}
+
+// Add this new function for unary operators
+ExprPtr parseUnary(ParserState &state) {
+    // Handle unary operators (!, -)
+    if (match(state, TokenType::NOT) || match(state, TokenType::MINUS)) {
+        Token op = previous(state);
+        ExprPtr right = parseUnary(state);  // Add state parameter here
+        return make_shared<UnaryExpr>(op, right);
+    }
+
+    return parsePrimary(state);
 }
