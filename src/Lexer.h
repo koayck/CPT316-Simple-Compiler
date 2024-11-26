@@ -39,7 +39,7 @@ private:
     bool isAtEnd() const { return current >= source.length(); }
 
     // returns the current character and advances the position by one
-    char advance();
+    char advance() {return source[current++];};
 
     // returns the current character without advancing the position
     char peek() const { return isAtEnd() ? '\0' : source[current]; }
