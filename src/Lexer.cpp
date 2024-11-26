@@ -169,22 +169,44 @@ Token Lexer::scanToken()
     if (isDigit(c)) {
         current--; // Move back to process the full number
         column--;
-        Token numToken = number();
         
-        // Check if the number is immediately followed by letters (invalid identifier)
-        if (isAlpha(peek()) || peek() == '_') {
-            while (!isAtEnd() && (isAlphaNumeric(peek()) || peek() == '_')) {
-                advance();
+        // Look ahead to see if this might be an invalid identifier
+        bool hasInvalidChar = false;
+        bool hasLetterOrUnderscore = false;
+        size_t lookAhead = current;
+        std::string invalidText;
+        
+        while (lookAhead < source.length() && 
+               !isspace(source[lookAhead]) && source[lookAhead] != ';' && 
+               source[lookAhead] != '=' && source[lookAhead] != '(' && 
+               source[lookAhead] != ')' && source[lookAhead] != '{' && 
+               source[lookAhead] != '}') {
+            char ch = source[lookAhead];
+            if (isAlpha(ch) || ch == '_') {
+                hasLetterOrUnderscore = true;
+            }
+            if (!isAlphaNumeric(ch) && ch != '_') {
+                hasInvalidChar = true;
+            }
+            lookAhead++;
+        }
+        
+        // If it's a potential invalid identifier (has letters/underscore)
+        if (hasLetterOrUnderscore || hasInvalidChar) {
+            // Consume the entire invalid token
+            while (current < lookAhead) {
+                invalidText += advance();
                 column++;
             }
-            std::string invalidText = source.substr(start, current - start);
             return Token(TokenType::INVALID, 
                         invalidText, 
                         line, 
                         startColumn,
-                        "Invalid identifier: cannot start with a number");
+                        "Invalid identifier: cannot start with a number and contains invalid characters");
         }
-        return numToken;
+        
+        // Otherwise, process as a normal number
+        return number();
     }
 
     // Handle identifiers and keywords
@@ -192,19 +214,81 @@ Token Lexer::scanToken()
         current--; // Move back to process the full identifier
         column--;
         
+        // Look ahead to see if this contains invalid characters
+        bool hasInvalidChar = false;
+        size_t lookAhead = current;
         std::string identifier;
-        while (!isAtEnd() && (isAlphaNumeric(peek()) || peek() == '_')) {
+        
+        while (lookAhead < source.length() && 
+               !isspace(source[lookAhead]) && source[lookAhead] != ';' && 
+               source[lookAhead] != '=' && source[lookAhead] != '(' && 
+               source[lookAhead] != ')' && source[lookAhead] != '{' && 
+               source[lookAhead] != '}') {
+            char ch = source[lookAhead];
+            if (!isAlphaNumeric(ch) && ch != '_') {
+                hasInvalidChar = true;
+            }
+            lookAhead++;
+        }
+        
+        // Consume the entire token
+        while (current < lookAhead) {
             identifier += advance();
             column++;
         }
-
+        
+        // If it contains invalid characters, return as invalid token
+        if (hasInvalidChar) {
+            return Token(TokenType::INVALID, 
+                        identifier, 
+                        line, 
+                        startColumn,
+                        "Invalid identifier: contains invalid characters");
+        }
+        
         // Check for keywords
         auto it = keywords.find(identifier);
         if (it != keywords.end()) {
             return Token(it->second, identifier, line, startColumn, "");
         }
-
+        
         return Token(TokenType::IDENTIFIER, identifier, line, startColumn, "");
+    }
+    
+
+    // Check for potential invalid identifiers starting with invalid symbols
+    if (!isspace(c) && c != ';' && c != '=' && c != '(' && c != ')' && 
+        c != '{' && c != '}' && c != '+' && c != '-' && c != '*' && 
+        c != '/' && c != '<' && c != '>' && c != '!' && c != '"') {
+        
+        current--; // Move back to include the invalid symbol
+        column--;
+
+        // Look ahead to see if this is part of an identifier or just invalid characters
+        size_t lookAhead = current;
+        std::string invalidText;
+        
+        // Collect all consecutive invalid/special characters
+        while (lookAhead < source.length() && 
+               !isspace(source[lookAhead]) && source[lookAhead] != ';' && 
+               source[lookAhead] != '=' && source[lookAhead] != '(' && 
+               source[lookAhead] != ')' && source[lookAhead] != '{' && 
+               source[lookAhead] != '}' && 
+               !isAlphaNumeric(source[lookAhead]) && source[lookAhead] != '_') {
+            lookAhead++;
+        }
+        
+        // Consume the invalid characters
+        while (current < lookAhead) {
+            invalidText += advance();
+            column++;
+        }
+        
+        return Token(TokenType::INVALID, 
+                    invalidText, 
+                    line, 
+                    startColumn,
+                    "Invalid character sequence: '" + invalidText + "'");
     }
 
     // Handle other token types
