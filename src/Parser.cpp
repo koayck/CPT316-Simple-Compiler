@@ -435,12 +435,9 @@ StmtPtr parseAssignment(ParserState &state)
 {
     Token name = advance(state);
     consume(state, TokenType::ASSIGN, "Expected '=' after variable name");
-    ExprPtr value = parseExpression(state);
     
-    // Check for semicolon immediately after the expression
-    if (!check(state, TokenType::SEMICOLON)) {
-        throw runtime_error(createErrorMessage(state, "Expected ';' after value"));
-    }
+    // Use parseComparison instead of parseExpression to handle comparison operators
+    ExprPtr value = parseComparison(state);
     
     consume(state, TokenType::SEMICOLON, "Expected ';' after value");
     return make_shared<AssignmentStmt>(name, value);
@@ -448,7 +445,7 @@ StmtPtr parseAssignment(ParserState &state)
 
 /**
  * @brief Parses a comparison expression
- * Handles comparison operators and logical operators (&&, ||)
+* Handles comparison operators and logical operators (&&, ||)
  */
 ExprPtr parseComparison(ParserState &state)
 {
@@ -460,8 +457,8 @@ ExprPtr parseComparison(ParserState &state)
            match(state, TokenType::LESS_EQUAL) ||
            match(state, TokenType::EQUAL_EQUAL) ||
            match(state, TokenType::NOT_EQUAL) ||
-           match(state, TokenType::AND) ||      // Add AND operator
-           match(state, TokenType::OR))         // Add OR operator
+           match(state, TokenType::AND) ||
+           match(state, TokenType::OR))
     {
         Token op = previous(state);
         ExprPtr right = parseExpression(state);

@@ -224,6 +224,18 @@ Token Lexer::scanToken()
             }
             return Token(TokenType::NOT, "!", line, startColumn, "");
         case '"': return string();
+        case '&':
+            if (match('&')) {
+                column++;
+                return Token(TokenType::AND, "&&", line, startColumn, "");
+            }
+            return Token(TokenType::INVALID, "&", line, startColumn, "Invalid operator: single '&' is not allowed");
+        case '|':
+            if (match('|')) {
+                column++;
+                return Token(TokenType::OR, "||", line, startColumn, "");
+            }
+            return Token(TokenType::INVALID, "|", line, startColumn, "Invalid operator: single '|' is not allowed");
     }
 
     // If we get here, we encountered an invalid character
