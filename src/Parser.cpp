@@ -623,23 +623,6 @@ StmtPtr parseTypeDeclaration(ParserState &state)
     Token type = previous(state);
     Token name = advance(state);
 
-    // Check for valid identifier pattern (must start with letter or underscore)
-    if (name.type != TokenType::IDENTIFIER) {
-        // First check if it starts with a digit
-        if (isdigit(name.lexeme[0])) {
-            throw runtime_error(createErrorMessage(state, 
-                "Invalid identifier: cannot start with a number"));
-        }
-        // Then check if it starts with letter or underscore
-        if (!isalpha(name.lexeme[0]) && name.lexeme[0] != '_') {
-            throw runtime_error(createErrorMessage(state, 
-                "Invalid identifier: must start with a letter or underscore"));
-        }
-        // If we get here, it's some other invalid pattern
-        throw runtime_error(createErrorMessage(state, 
-            "Invalid identifier: '" + name.lexeme + "'"));
-    }
-
     ExprPtr initializer = nullptr;
     if (match(state, TokenType::ASSIGN))
     {
@@ -675,15 +658,28 @@ StmtPtr parseTypeDeclaration(ParserState &state)
         }
         else
         {
-            // Regular initialization - use parseComparison instead of parseExpression
-            // to handle logical operators
+            // Regular initialization
             initializer = parseComparison(state);
-            consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
+            
+            // Check for semicolon immediately after the expression
+            if (!check(state, TokenType::SEMICOLON)) {
+                // Use the last token's position for error reporting
+                Token lastToken = previous(state);
+                throw runtime_error("Line " + to_string(lastToken.line) + 
+                    ", Column " + to_string(lastToken.column + lastToken.lexeme.length()) + 
+                    ": Expected ';' after declaration");
+            }
+            advance(state); // consume semicolon
         }
     }
     else
     {
-        consume(state, TokenType::SEMICOLON, "Expected ';' after declaration");
+        if (!check(state, TokenType::SEMICOLON)) {
+            throw runtime_error("Line " + to_string(name.line) + 
+                ", Column " + to_string(name.column + name.lexeme.length()) + 
+                ": Expected ';' after declaration");
+        }
+        advance(state); // consume semicolon
     }
 
     return make_shared<TypeDeclarationStmt>(type, name, initializer);
