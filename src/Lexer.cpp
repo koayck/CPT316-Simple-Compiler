@@ -412,28 +412,28 @@ void printTokens(const vector<Token> &tokens)
 {
     // Print header
     cout << "\nTokenization Results:\n";
-    cout << setw(8) << "Line" << setw(8) << "Column" << setw(16) << "Type" << setw(20) << "Value\n";
-    cout << string(52, '-') << "\n";
+    cout << setw(10) << "Line" << setw(12) << "Column" << setw(25) << "Type" << setw(35) << "Value\n";
+    cout << string(82, '-') << "\n";
 
     // Print each token, including INVALID tokens
     for (const auto &token : tokens)
     {
-        cout << setw(8) << token.line
-             << setw(8) << token.column
-             << setw(16) << tokenTypeToString(token.type);
+        cout << setw(10) << token.line
+             << setw(12) << token.column
+             << setw(25) << tokenTypeToString(token.type);
 
         // Handle value based on token type
         if (token.type == TokenType::INTEGER || token.type == TokenType::DOUBLE)
         {
-            cout << setw(20) << token.numValue;
+            cout << setw(35) << token.numValue;
         }
         else if (token.type == TokenType::STRING)
         {
-            cout << setw(20) << "\"" + token.lexeme + "\"";
+            cout << setw(35) << "\"" + token.lexeme + "\"";
         }
         else
         {
-            cout << setw(20) << token.lexeme;
+            cout << setw(35) << token.lexeme;
         }
         cout << "\n";
     }

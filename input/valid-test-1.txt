@@ -1,26 +1,30 @@
-int a = 10 + 20 + 30;
-int b = r("Enter value for b: ");
-b = 20 - 5;
-double c = 30.5 ** 2;
-double d = 40.5/2;
-string input_greeting = "Hello, World!";
-bool g = true;
-bool f = true;
-bool h = false;
-bool i = false;
-while (f) {
-    if (a >= b) {
-        if (g) {
-            a = a*b;
-            p(e);
-            if (i) {
-                p("i is true Next line");
-            } else {
-                p("i is false Indented new line");
+int score = 100 + 50 - 25;
+
+double temperature = r("Enter temperature: ");
+temperature = 32.0 * 9 / 5 + 32;
+
+string message = "Temperature Status";
+
+bool isRunning = true;
+bool isTooHot = temperature > 90;
+
+while (isRunning) {
+    if (temperature <= 100) {
+        if (score >= 100) {
+            if (temperature != 0) {
+                p("Hot!");              
+                isRunning = false;
             }
-            double result = c + d;
-            p("Sum of c and d is: " + result);
-            f = false;
+            else {
+                p("Freezzing!");
+            }   
         }
     }
 }
+
+double calculation = 5.5 
+    * 2 
+        + 3.3 
+            / 1.1;
+
+string message = "This is a weird" + " but valid" + " test file";

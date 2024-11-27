@@ -1,5 +1,7 @@
-p@r = 10
+p$#r = 10
 
-int z = 0.2;
-a = 10/10;
-
+double price = .99;
+string message = "This string never ends...
+int 1score = 50;
+int my@score = 75;
+double weird_num = 42.42.42;
