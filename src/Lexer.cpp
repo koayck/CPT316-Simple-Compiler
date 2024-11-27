@@ -304,7 +304,7 @@ Token Lexer::string()
         if (peek() == '\n')
         {
             return Token(TokenType::INVALID,
-                         "Unterminated string: string literal must be closed before end of line",
+                         source.substr(start, current - (start)),
                          line, startColumn, "");
         }
         advance();
@@ -314,7 +314,7 @@ Token Lexer::string()
     if (isAtEnd() || peek() != '"')
     {
         return Token(TokenType::INVALID,
-                     "Unterminated string: missing closing quote",
+                     source.substr(start + 1, current - (start)),
                      line, startColumn, "");
     }
 
