@@ -748,9 +748,27 @@ string createCompleteASTString(const vector<StmtPtr> &statements)
     result += "Program\n";
     result += "|-- Statements:\n";
     
-    for (const auto &statement : statements)
-    {
-        result += createASTString(statement, 4);
+    for (size_t i = 0; i < statements.size(); i++) {
+        // Get the statement string and split it into lines
+        string stmtStr = statements[i]->toString();
+        istringstream stream(stmtStr);
+        string line;
+        bool firstLine = true;
+        
+        // Process each line of the statement
+        while (getline(stream, line)) {
+            if (firstLine) {
+                result += "    " + line + "\n";
+                firstLine = false;
+            } else {
+                result += "    " + line + "\n";
+            }
+        }
+        
+        // Add extra newline between statements
+        if (i < statements.size() - 1) {
+            result += "\n";
+        }
     }
     return result;
 }
