@@ -27,10 +27,16 @@ cd out/build/my\ preset
 
 ## Project Structure
 
+
+
 ```
 CPT316-Simple-Compiler
 ├─ .gitignore
 ├─ CMakeLists.txt
+├─ out
+│  ├─ build
+│  └─ my preset
+│      └─ CPT316-Simple-Compiler.exe
 ├─ input
 │  ├─ invalid-test-1.txt (lexical error)
 │  ├─ invalid-test-2.txt (syntax error)
