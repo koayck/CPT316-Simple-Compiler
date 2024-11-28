@@ -1,3 +1,13 @@
 CMakePresets.json
-\out
 \.vscode
+
+# Ignore everything in out directory
+out/*
+out/build/*
+out/build/my preset/*
+
+# But keep the executable
+!out/
+!out/build/
+!out/build/my preset/
+!out/build/my preset/CPT316-Simple-Compiler.exe
