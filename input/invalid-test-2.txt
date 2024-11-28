@@ -1,20 +1,11 @@
 int x = 10
 
-int y = 20 +;
+x + y = 10;
+int x = 10 + ;
+int y = 10 + * 20;
 
-while testing_123 > 0) {
-    p("This won't work");
-}
+x = r"Enter value:";
 
-x + y = 30;
-
-if (x > 0) {
-    p("Opening brace...");
-
-int z = 5 ** / 2;
-
-if () {
-    p("No condition!");
-}
-
-string message = "Goodbye!";
+if (x > 5) {
+    y = 10;
+    z = 20;
